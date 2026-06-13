@@ -1,0 +1,6 @@
+{
+  "name": "GreenLens Cameroon",
+  "description": "AI-powered Environmental Intelligence Platform for Cameroon. Translates community observations into catalogs, tracking local restoration, cleanup campaigns, and environmental quality scores.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
