@@ -194,6 +194,9 @@ export default function EnvironmentalMap({
           maxZoom: 10,
         });
       }
+    } else {
+      // Force safe fallback centering to guarantee map is initialized and centered without any empty data crashes
+      map.setView([5.6, 12.0], 6);
     }
   }, [catalogs, selectedRegion, onSelectCatalog]);
 

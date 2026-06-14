@@ -15,6 +15,7 @@ import ProfileTab from "./components/ProfileTab";
 import CatalogDetailModal from "./components/CatalogDetailModal";
 import WelcomePage from "./components/WelcomePage";
 import DynamicIsland from "./components/DynamicIsland";
+import { SEED_CATALOGS, SEED_ORGANIZATIONS, SEED_USER_STATS } from "./data/seedData";
 
 type TabId = "explore" | "contribute" | "impact" | "insights" | "profile";
 
@@ -26,27 +27,27 @@ export default function App() {
   const [catalogs, setCatalogs] = useState<EnvironmentalCatalog[]>(() => {
     try {
       const cached = localStorage.getItem("greenlens_catalogs");
-      return cached ? JSON.parse(cached) : [];
+      return cached ? JSON.parse(cached) : SEED_CATALOGS;
     } catch {
-      return [];
+      return SEED_CATALOGS;
     }
   });
   
   const [organizations, setOrganizations] = useState<Organization[]>(() => {
     try {
       const cached = localStorage.getItem("greenlens_organizations");
-      return cached ? JSON.parse(cached) : [];
+      return cached ? JSON.parse(cached) : SEED_ORGANIZATIONS;
     } catch {
-      return [];
+      return SEED_ORGANIZATIONS;
     }
   });
   
   const [userStats, setUserStats] = useState<UserStats | null>(() => {
     try {
       const cached = localStorage.getItem("greenlens_userstats");
-      return cached ? JSON.parse(cached) : null;
+      return cached ? JSON.parse(cached) : SEED_USER_STATS;
     } catch {
-      return null;
+      return SEED_USER_STATS;
     }
   });
   

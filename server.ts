@@ -8,6 +8,18 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import {
+  getSupabase,
+  getLiveCatalogs,
+  createLiveCatalog,
+  insertLiveObservation,
+  getLiveOrganizations,
+  createLiveOrganization,
+  createLiveCampaign,
+  insertLiveVerification,
+  getLiveUserStats,
+  saveLiveUserStats
+} from "./server/supabase.js";
 
 dotenv.config();
 
@@ -718,12 +730,21 @@ async function startServer() {
   app.use(express.json({ limit: "20mb" }));
 
   // API 1: Fetch all catalogs
-  app.get("/api/catalogs", (req, res) => {
+  app.get("/api/catalogs", async (req, res) => {
+    try {
+      const live = await getLiveCatalogs();
+      if (live !== null) {
+        return res.json(live);
+      }
+    } catch (err) {
+      console.warn("Could not retrieve catalogs from database:", err?.message || err);
+    }
+    // Fallback to in-memory catalogs
     res.json(catalogs);
   });
 
   // API 2: Create a catalog (manual unmapped catalog creation)
-  app.post("/api/catalogs", (req, res) => {
+  app.post("/api/catalogs", async (req, res) => {
     const { region, city, townOrArrondissement, neighborhood, coordinates } = req.body;
     
     if (!region || !city || !townOrArrondissement || !neighborhood) {
@@ -735,11 +756,6 @@ async function startServer() {
     const cityCode = city.substring(0, 3).toUpperCase();
     const neighborhoodCode = neighborhood.substring(0, 3).toUpperCase();
     const id = `LOC_${neighborhoodCode}_${cityCode}_${regionCode}_CMR`;
-
-    const existing = catalogs.find(c => c.id === id);
-    if (existing) {
-      return res.json(existing);
-    }
 
     const lat = coordinates?.lat || (3.8 + Math.random() * 2);
     const lon = coordinates?.lon || (11.5 + Math.random() * 2);
@@ -761,12 +777,39 @@ async function startServer() {
       campaigns: []
     };
 
+    try {
+      const live = await createLiveCatalog(newCatalog);
+      if (live) {
+        return res.status(201).json(live);
+      }
+    } catch (err) {
+      console.warn("Could not save new catalog to database:", err?.message || err);
+    }
+
+    const existing = catalogs.find(c => c.id === id);
+    if (existing) {
+      return res.json(existing);
+    }
+
     catalogs.push(newCatalog);
     res.status(201).json(newCatalog);
   });
 
   // API 3: Get single catalog detail
-  app.get("/api/catalogs/:id", (req, res) => {
+  app.get("/api/catalogs/:id", async (req, res) => {
+    try {
+      const live = await getLiveCatalogs();
+      if (live !== null) {
+        const cat = live.find(c => c.id === req.params.id);
+        if (!cat) {
+          return res.status(404).json({ error: "Environmental Catalog location not defined." });
+        }
+        return res.json(cat);
+      }
+    } catch (err) {
+      console.warn("Direct live database catalog lookup failed:", err?.message || err);
+    }
+
     const catalog = catalogs.find(c => c.id === req.params.id);
     if (!catalog) {
       return res.status(404).json({ error: "Environmental Catalog location not defined." });
@@ -782,31 +825,69 @@ async function startServer() {
       return res.status(400).json({ error: "Observation description is required." });
     }
 
-    // Resolve or Auto-create Catalog
-    let targetCatalog = catalogs.find(c => c.id === catalogId);
-    if (!targetCatalog) {
-      const regionCode = (region || "CEN").substring(0, 3).toUpperCase();
-      const cityCode = (city || "YAO").substring(0, 3).toUpperCase();
-      const neighborhoodCode = (neighborhood || "MLN").substring(0, 3).toUpperCase();
-      const newId = `LOC_${neighborhoodCode}_${cityCode}_${regionCode}_CMR`;
+    // Resolve or Auto-create Catalog from live db/memory
+    let targetCatalog: any = null;
+    let fallbackToMemory = false;
 
-      targetCatalog = catalogs.find(c => c.id === newId);
+    try {
+      const liveCats = await getLiveCatalogs();
+      if (liveCats !== null) {
+        targetCatalog = liveCats.find(c => c.id === catalogId);
+        if (!targetCatalog) {
+          const regionCode = (region || "CEN").substring(0, 3).toUpperCase();
+          const cityCode = (city || "YAO").substring(0, 3).toUpperCase();
+          const neighborhoodCode = (neighborhood || "MLN").substring(0, 3).toUpperCase();
+          const newId = `LOC_${neighborhoodCode}_${cityCode}_${regionCode}_CMR`;
+
+          targetCatalog = liveCats.find(c => c.id === newId);
+          if (!targetCatalog) {
+            const freshCat = {
+              id: newId,
+              region: region || "Centre",
+              city: city || "Yaoundé",
+              townOrArrondissement: townOrArrondissement || "Yaoundé VI",
+              neighborhood: neighborhood || "Melen",
+              envScore: 50,
+              coordinates: { lat: 3.8667 + Math.random() * 0.1, lon: 11.5167 + Math.random() * 0.1 },
+            };
+            targetCatalog = await createLiveCatalog(freshCat);
+          }
+        }
+      } else {
+        fallbackToMemory = true;
+      }
+    } catch (err) {
+      console.warn("Could not query live database for catalog validation:", err?.message || err);
+      fallbackToMemory = true;
+    }
+
+    if (fallbackToMemory || !targetCatalog) {
+      // Memory fallback loop
+      targetCatalog = catalogs.find(c => c.id === catalogId);
       if (!targetCatalog) {
-        targetCatalog = {
-          id: newId,
-          region: region || "Centre",
-          city: city || "Yaoundé",
-          townOrArrondissement: townOrArrondissement || "Yaoundé VI",
-          neighborhood: neighborhood || "Melen",
-          envScore: 50,
-          coordinates: { lat: 3.8667 + Math.random() * 0.1, lon: 11.5167 + Math.random() * 0.1 },
-          lastUpdated: new Date().toLocaleDateString(),
-          activeCampaignsCount: 0,
-          trends: [{ date: "Current", score: 50 }],
-          observations: [],
-          campaigns: []
-        };
-        catalogs.push(targetCatalog);
+        const regionCode = (region || "CEN").substring(0, 3).toUpperCase();
+        const cityCode = (city || "YAO").substring(0, 3).toUpperCase();
+        const neighborhoodCode = (neighborhood || "MLN").substring(0, 3).toUpperCase();
+        const newId = `LOC_${neighborhoodCode}_${cityCode}_${regionCode}_CMR`;
+
+        targetCatalog = catalogs.find(c => c.id === newId);
+        if (!targetCatalog) {
+          targetCatalog = {
+            id: newId,
+            region: region || "Centre",
+            city: city || "Yaoundé",
+            townOrArrondissement: townOrArrondissement || "Yaoundé VI",
+            neighborhood: neighborhood || "Melen",
+            envScore: 50,
+            coordinates: { lat: 3.8667 + Math.random() * 0.1, lon: 11.5167 + Math.random() * 0.1 },
+            lastUpdated: new Date().toLocaleDateString(),
+            activeCampaignsCount: 0,
+            trends: [{ date: "Current", score: 50 }],
+            observations: [],
+            campaigns: []
+          };
+          catalogs.push(targetCatalog);
+        }
       }
     }
 
@@ -936,7 +1017,38 @@ async function startServer() {
       aiClassification
     };
 
-    // Store observation
+    // Live Supabase Writer
+    try {
+      const liveObs = await insertLiveObservation(newObservation);
+      if (liveObs) {
+        // Fetch freshly calculated target catalog (which updated its environmental scores inside PgSQL triggers)
+        const reloadedCats = await getLiveCatalogs();
+        const updatedTargetCatalog = (reloadedCats || []).find(c => c.id === targetCatalog.id);
+
+        // Update User Statistics Profile
+        const currentStats = await getLiveUserStats() || userStats;
+        currentStats.contributionsCount += 1;
+        currentStats.xp += 30; // 30 XP per observation reward
+
+        if (currentStats.xp < 100) currentStats.level = "Observer";
+        else if (currentStats.xp < 250) currentStats.level = "Eco Scout";
+        else if (currentStats.xp < 500) currentStats.level = "Community Guardian";
+        else if (currentStats.xp < 1000) currentStats.level = "Environmental Advocate";
+        else currentStats.level = "Green Champion";
+
+        const savedStats = await saveLiveUserStats(currentStats);
+
+        return res.status(201).json({
+          observation: liveObs,
+          catalog: updatedTargetCatalog,
+          userStats: savedStats || currentStats
+        });
+      }
+    } catch (err) {
+      console.warn("Database registration for report failed, degrading gracefully to client simulation:", err?.message || err);
+    }
+
+    // Fallback Simulated Persistence Flow
     targetCatalog.observations.unshift(newObservation);
     
     // Recalculate physical score with deterministic scoring engine!
@@ -959,12 +1071,20 @@ async function startServer() {
   });
 
   // API 5: Fetch all organizations
-  app.get("/api/organizations", (req, res) => {
+  app.get("/api/organizations", async (req, res) => {
+    try {
+      const live = await getLiveOrganizations();
+      if (live !== null) {
+        return res.json(live);
+      }
+    } catch (err) {
+      console.warn("Database-backed query for organization groups failed:", err?.message || err);
+    }
     res.json(organizations);
   });
 
   // API 6: Register organization
-  app.post("/api/organizations", (req, res) => {
+  app.post("/api/organizations", async (req, res) => {
     const { name, type, email, phone, areaCatalogId, description } = req.body;
 
     if (!name || !email || !areaCatalogId) {
@@ -983,19 +1103,36 @@ async function startServer() {
       impactScore: 50 // starting average score
     };
 
+    try {
+      const live = await createLiveOrganization(newOrg);
+      if (live) {
+        return res.status(201).json(live);
+      }
+    } catch (err) {
+      console.warn("Database organization insert failed:", err?.message || err);
+    }
+
     organizations.push(newOrg);
     res.status(201).json(newOrg);
   });
 
   // API 7: Register Campaign
-  app.post("/api/campaigns", (req, res) => {
+  app.post("/api/campaigns", async (req, res) => {
     const { organizationName, title, catalogId, description, startDate, endDate, beforeImage } = req.body;
 
     if (!organizationName || !title || !catalogId || !description || !startDate) {
       return res.status(400).json({ error: "Missing required catalog or organization parameters to register campaign." });
     }
 
-    const targetCatalog = catalogs.find(c => c.id === catalogId);
+    // Safe retrieve target
+    let targetCatalog: any = null;
+    try {
+      const liveCats = await getLiveCatalogs();
+      targetCatalog = (liveCats || catalogs).find(c => c.id === catalogId);
+    } catch {
+      targetCatalog = catalogs.find(c => c.id === catalogId);
+    }
+
     if (!targetCatalog) {
       return res.status(404).json({ error: "Selected Administrative Catalog does not exist yet." });
     }
@@ -1022,13 +1159,32 @@ async function startServer() {
       catalogId,
       description,
       startDate,
-      endDate: endDate || "",
+      endDate: endDate || null,
       status: "Active",
       beforeImage: finalBeforeImage,
       verifications: [],
       verifiedImprovementScore: 0,
       verificationsCount: 0
     };
+
+    try {
+      const live = await createLiveCampaign(newCampaign);
+      if (live) {
+        // Update catalogs total campaigns count
+        const supabase = getSupabase();
+        if (supabase) {
+          await supabase.from("catalogs").update({
+            active_campaigns_count: (targetCatalog.activeCampaignsCount || 0) + 1
+          }).eq("id", catalogId);
+        }
+
+        const freshCats = await getLiveCatalogs();
+        const updatedCat = (freshCats || []).find(c => c.id === catalogId);
+        return res.status(201).json({ campaign: live, catalog: updatedCat });
+      }
+    } catch (err) {
+      console.warn("Database-backed campaign creation failed:", err?.message || err);
+    }
 
     if (!targetCatalog.campaigns) {
       targetCatalog.campaigns = [];
@@ -1040,15 +1196,82 @@ async function startServer() {
   });
 
   // API 8: Upload campaign after image (Trigger completion of campaign)
-  app.post("/api/campaigns/:id/complete", (req, res) => {
+  app.post("/api/campaigns/:id/complete", async (req, res) => {
     const { afterImage } = req.body;
+    const campaignId = req.params.id;
 
     let foundCampaign: any = null;
     let foundCatalog: any = null;
 
+    // Search Live first
+    let liveCatalogs: any[] | null = null;
+    try {
+      liveCatalogs = await getLiveCatalogs();
+      if (liveCatalogs !== null) {
+        for (const cat of liveCatalogs) {
+          if (cat.campaigns) {
+            const camp = cat.campaigns.find((c: any) => c.id === campaignId);
+            if (camp) {
+              foundCampaign = camp;
+              foundCatalog = cat;
+              break;
+            }
+          }
+        }
+      }
+    } catch (err) {
+       console.warn("Could not validate live campaign row for completion:", err?.message || err);
+    }
+
+    // Direct edit in Live DB
+    if (foundCampaign && foundCatalog) {
+      let finalAfterImage = afterImage;
+      if (!finalAfterImage) {
+        const titleLower = (foundCampaign.title + " " + foundCampaign.description).toLowerCase();
+        if (titleLower.includes("gutter") || titleLower.includes("drain") || titleLower.includes("clog") || titleLower.includes("canal") || titleLower.includes("sewage")) {
+          finalAfterImage = "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=600&q=80";
+        } else if (titleLower.includes("tree") || titleLower.includes("plant") || titleLower.includes("forest") || titleLower.includes("green")) {
+          finalAfterImage = "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=600&q=80";
+        } else if (titleLower.includes("bin") || titleLower.includes("sorting") || titleLower.includes("container") || titleLower.includes("recycle") || titleLower.includes("litter")) {
+          finalAfterImage = "https://images.unsplash.com/photo-1466692476868-aef1dfb1e735?auto=format&fit=crop&w=600&q=80";
+        } else {
+          finalAfterImage = "https://images.unsplash.com/photo-1530595467537-0b5996c41f2d?auto=format&fit=crop&w=600&q=80";
+        }
+      }
+
+      const supabase = getSupabase();
+      if (supabase) {
+        try {
+          // Update campaign status
+          await supabase.from("campaigns").update({
+            status: "Completed",
+            after_image: finalAfterImage,
+            end_date: new Date().toISOString().split("T")[0]
+          }).eq("id", campaignId);
+
+          // Decrement catalog active counter
+          await supabase.from("catalogs").update({
+            active_campaigns_count: Math.max(0, (foundCatalog.activeCampaignsCount || 1) - 1)
+          }).eq("id", foundCatalog.id);
+
+          const refreshed = await getLiveCatalogs();
+          const targetCat = (refreshed || []).find(c => c.id === foundCatalog.id);
+          const targetCamp = targetCat?.campaigns?.find((c: any) => c.id === campaignId);
+
+          return res.json({ campaign: targetCamp, catalog: targetCat });
+        } catch (err) {
+          console.warn("Dynamic campaign completion insert failed:", err?.message || err);
+        }
+      }
+    }
+
+    // Memory database operations fallback
+    foundCampaign = null;
+    foundCatalog = null;
+
     for (const cat of catalogs) {
       if (cat.campaigns) {
-        const camp = cat.campaigns.find((c: any) => c.id === req.params.id);
+        const camp = cat.campaigns.find((c: any) => c.id === campaignId);
         if (camp) {
           foundCampaign = camp;
           foundCatalog = cat;
@@ -1086,8 +1309,9 @@ async function startServer() {
   });
 
   // API 9: Vote community verification of Before/After comparing trust layer
-  app.post("/api/campaigns/:id/verify", (req, res) => {
+  app.post("/api/campaigns/:id/verify", async (req, res) => {
     const { email, improvementLevel } = req.body;
+    const campaignId = req.params.id;
 
     if (!improvementLevel) {
       return res.status(400).json({ error: "Improvement answer rating is required." });
@@ -1096,9 +1320,111 @@ async function startServer() {
     let foundCampaign: any = null;
     let foundCatalog: any = null;
 
+    // Search live first
+    try {
+      const liveCats = await getLiveCatalogs();
+      if (liveCats !== null) {
+        for (const cat of liveCats) {
+          if (cat.campaigns) {
+            const camp = cat.campaigns.find((c: any) => c.id === campaignId);
+            if (camp) {
+              foundCampaign = camp;
+              foundCatalog = cat;
+              break;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Interactive verification voter lookup failed:", err?.message || err);
+    }
+
+    if (foundCampaign && foundCatalog) {
+      // live Supabase operation
+      const newVerification = {
+        id: `v_${Date.now()}`,
+        campaignId,
+        voterEmail: email || userStats.email,
+        timestamp: new Date().toISOString(),
+        improvementLevel
+      };
+
+      try {
+        const liveV = await insertLiveVerification(newVerification);
+        if (liveV) {
+          // Re-calculate average improvement score inside Postgres (simulated on queries)
+          const scoreMap: Record<string, number> = { Significant: 100, Moderate: 70, Little: 30, No: 0 };
+          const activeVerifications = [...(foundCampaign.verifications || []), liveV];
+          const totalScore = activeVerifications.reduce((sum: number, v: any) => sum + scoreMap[v.improvementLevel], 0);
+          const computedScore = Math.round(totalScore / activeVerifications.length);
+
+          const supabase = getSupabase();
+          if (supabase) {
+            // Write completed improvement rating
+            await supabase.from("campaigns").update({
+              verified_improvement_score: computedScore
+            }).eq("id", campaignId);
+
+            // Boost Env Score slightly as active proof of cleanliness is verified
+            const scoreIncrease = Math.round((scoreMap[improvementLevel] / 100) * 12);
+            const freshEnvScore = Math.min(100, (foundCatalog.envScore || 50) + scoreIncrease);
+            await supabase.from("catalogs").update({
+              env_score: freshEnvScore
+            }).eq("id", foundCatalog.id);
+
+            // Log trend snap
+            await supabase.from("catalog_trends").insert({
+              catalog_id: foundCatalog.id,
+              score: freshEnvScore
+            });
+
+            // XP and status for verify
+            const currentStats = await getLiveUserStats() || userStats;
+            currentStats.verifiedCleanupsCount += 1;
+            currentStats.xp += 15; // 15 XP reward
+
+            if (currentStats.xp < 100) currentStats.level = "Observer";
+            else if (currentStats.xp < 250) currentStats.level = "Eco Scout";
+            else if (currentStats.xp < 500) currentStats.level = "Community Guardian";
+            else if (currentStats.xp < 1000) currentStats.level = "Environmental Advocate";
+            else currentStats.level = "Green Champion";
+
+            const savedStats = await saveLiveUserStats(currentStats);
+
+            // Update campaign NGO stats
+            const liveOrgs = await getLiveOrganizations();
+            const matchingOrg = (liveOrgs || []).find(o => o.name === foundCampaign.organizationName);
+            if (matchingOrg) {
+              const updatedImpactScore = Math.min(100, Math.round((matchingOrg.impactScore + computedScore) / 2));
+              await supabase.from("organizations").update({ impact_score: updatedImpactScore }).eq("id", matchingOrg.id);
+            }
+
+            // Return updated objects
+            const freshCats = await getLiveCatalogs();
+            const freshOrgs = await getLiveOrganizations();
+            const lastCatalog = (freshCats || []).find(c => c.id === foundCatalog.id);
+            const lastCampaign = lastCatalog?.campaigns?.find((c: any) => c.id === campaignId);
+
+            return res.json({
+              campaign: lastCampaign,
+              catalog: lastCatalog,
+              userStats: savedStats || currentStats,
+              organizations: freshOrgs || organizations
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Could not register vote or update ranks on database:", err?.message || err);
+      }
+    }
+
+    // Memory search fallback
+    foundCampaign = null;
+    foundCatalog = null;
+
     for (const cat of catalogs) {
       if (cat.campaigns) {
-        const camp = cat.campaigns.find((c: any) => c.id === req.params.id);
+        const camp = cat.campaigns.find((c: any) => c.id === campaignId);
         if (camp) {
           foundCampaign = camp;
           foundCatalog = cat;
@@ -1123,14 +1449,12 @@ async function startServer() {
     foundCampaign.verificationsCount += 1;
 
     // Recalculate campaign verifiedImprovementScore based on voter weights
-    // Significant = 100, Moderate = 70, Little = 30, No = 0
     const scoreMap: Record<string, number> = { Significant: 100, Moderate: 70, Little: 30, No: 0 };
     const totalScore = foundCampaign.verifications.reduce((sum: number, v: any) => sum + scoreMap[v.improvementLevel], 0);
     foundCampaign.verifiedImprovementScore = Math.round(totalScore / foundCampaign.verifications.length);
 
     // Dynamic catalyst: improve catalog Env Score since community cleanup actually yielded verified progress!
     const scoreIncrease = Math.round((scoreMap[improvementLevel] / 100) * 12); // max +12 indicator point
-    const oldScore = foundCatalog.envScore;
     foundCatalog.envScore = Math.min(100, foundCatalog.envScore + scoreIncrease);
     foundCatalog.trends.push({
       date: `Verified ${new Date().toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}`,
@@ -1146,7 +1470,7 @@ async function startServer() {
     else if (userStats.xp < 1000) userStats.level = "Environmental Advocate";
     else userStats.level = "Green Champion";
 
-    // Update cleanup organization impact score if matching organization name is listed in system
+    // Update cleanup organization impact score
     const matchingOrg = organizations.find(o => o.name === foundCampaign.organizationName);
     if (matchingOrg) {
       matchingOrg.impactScore = Math.min(100, Math.round((matchingOrg.impactScore + foundCampaign.verifiedImprovementScore) / 2));
@@ -1156,7 +1480,7 @@ async function startServer() {
   });
 
   // API 10: EcoPulse Daily Check-in submit
-  app.post("/api/ecopulse", (req, res) => {
+  app.post("/api/ecopulse", async (req, res) => {
     const { transportMode, wasteSegregation, organicComposting, plasticReduction, energyConserved } = req.body;
 
     // General dynamic formula to derive new Eco score out of contributions and actions
@@ -1179,9 +1503,30 @@ async function startServer() {
     if (plasticReduction === "Strict Avoidance") reduction += 20;
     if (energyConserved) reduction += 15;
 
+    // Save Live Supabase Stats
+    try {
+      const activeStats = await getLiveUserStats() || userStats;
+      activeStats.ecoPulseScore = Math.min(100, dailyScore);
+      activeStats.carbonFootprint = Math.max(25, baseFootprint - reduction);
+      activeStats.xp += 25; // 25 XP for EcoPulse daily commitment routine
+      
+      if (activeStats.xp < 100) activeStats.level = "Observer";
+      else if (activeStats.xp < 250) activeStats.level = "Eco Scout";
+      else if (activeStats.xp < 500) activeStats.level = "Community Guardian";
+      else if (activeStats.xp < 1000) activeStats.level = "Environmental Advocate";
+      else activeStats.level = "Green Champion";
+
+      const savedStats = await saveLiveUserStats(activeStats);
+      if (savedStats) {
+        return res.json({ userStats: savedStats });
+      }
+    } catch (err) {
+      console.warn("Self-reported daily checklist score not saved to live database:", err?.message || err);
+    }
+
     userStats.ecoPulseScore = Math.min(100, dailyScore);
     userStats.carbonFootprint = Math.max(25, baseFootprint - reduction);
-    userStats.xp += 25; // 25 XP for EcoPulse daily commitment routine
+    userStats.xp += 25; // 25 XP
     
     if (userStats.xp < 100) userStats.level = "Observer";
     else if (userStats.xp < 250) userStats.level = "Eco Scout";
@@ -1193,9 +1538,18 @@ async function startServer() {
   });
 
   // API 11: Get single user stats profile
-  app.get("/api/user-stats", (req, res) => {
+  app.get("/api/user-stats", async (req, res) => {
+    try {
+      const liveStats = await getLiveUserStats();
+      if (liveStats) {
+        return res.json(liveStats);
+      }
+    } catch (err) {
+      console.warn("Direct score statistics row query failed:", err?.message || err);
+    }
     res.json(userStats);
   });
+
 
   // API 12: Get general Cameroon location lists (Region -> City -> Neighborhoods)
   app.get("/api/locations", (req, res) => {
@@ -1205,10 +1559,19 @@ async function startServer() {
   // API 13: Direct intelligent hotspots summary analysis
   app.get("/api/insights/summary", async (req, res) => {
     const client = getGeminiClient();
+    let analysisCatalogs = catalogs;
+    try {
+      const live = await getLiveCatalogs();
+      if (live !== null) {
+        analysisCatalogs = live;
+      }
+    } catch (err) {
+      console.warn("Live analytical database fetch failed, running insights on memory fallback:", err?.message || err);
+    }
     
     // Core structural summary text
     let promptText = `Review this high level environmental status database for Cameroon:
-    ${JSON.stringify(catalogs.map(c => ({
+    ${JSON.stringify(analysisCatalogs.map(c => ({
       name: `${c.neighborhood}, ${c.city}`,
       score: c.envScore,
       observationsCount: c.observations.length,
