@@ -15,6 +15,7 @@ import {
   CheckCircle
 } from "lucide-react";
 import { UserStats } from "../types";
+import { AnimatedDock, DockItemData } from "./ui/animated-dock";
 
 type TabId = "explore" | "contribute" | "impact" | "insights" | "profile";
 
@@ -74,6 +75,20 @@ export default function DynamicIsland({
   const currentTabObj = tabs.find(t => t.id === activeTab) || tabs[0];
   const ActiveIcon = currentTabObj.icon;
 
+  // Map application tabs to AnimatedDock items with active tracking state
+  const dockItems: DockItemData[] = tabs.map((tab) => {
+    const IconComponent = tab.icon;
+    return {
+      Icon: <IconComponent className="h-[18px] w-[18px]" />,
+      onClick: () => {
+        setActiveTab(tab.id);
+        setIsExpanded(false);
+      },
+      label: tab.label,
+      isActive: activeTab === tab.id,
+    };
+  });
+
   // Delightful, ultra-snappy, and organic physics-based spring transitions (modeled after professional iOS fluid kinetics)
   const springTransition = {
     type: "spring",
@@ -94,11 +109,11 @@ export default function DynamicIsland({
     }
     if (isExpanded) {
       return {
-        width: "min(440px, 94vw)",
-        height: "58px",
-        borderRadius: "29px",
-        background: "rgba(13, 16, 15, 0.96)",
-        border: "1px solid rgba(255, 255, 255, 0.14)"
+        width: "min(330px, 94vw)",
+        height: "54px",
+        borderRadius: "27px",
+        background: "rgba(10, 12, 11, 0.98)",
+        border: "1px solid rgba(255, 255, 255, 0.12)"
       };
     }
     // Compact Sizing
@@ -204,60 +219,20 @@ export default function DynamicIsland({
               </div>
             </motion.div>
           ) : (
-            /* Fully Expanded dynamic navigation mode */
+            /* Fully Expanded dynamic navigation mode powered by animated dock */
             <motion.div
               key="expanded-navigation-state"
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.92 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              exit={{ opacity: 0, scale: 0.92 }}
               transition={{ duration: 0.15 }}
-              className="w-full h-full flex items-center justify-between px-2 text-white"
+              className="w-full h-full flex items-center justify-center"
               id="expanded-navigation-content"
             >
-              <div className="flex items-center justify-between w-full h-full px-1" id="island-tabs-inner">
-                {tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
-                  
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveTab(tab.id);
-                        // Morph back into the elegant compact pill upon clicking
-                        setIsExpanded(false);
-                      }}
-                      className="relative h-11 px-1 flex flex-col items-center justify-center flex-1 group cursor-pointer"
-                      id={`island-direct-tab-${tab.id}`}
-                    >
-                      {/* Bouncy active tab highlights slides across menu options */}
-                      {isActive && (
-                        <motion.div
-                          layoutId="island-nav-highlighter"
-                          transition={springTransition}
-                          className="absolute inset-x-0.5 inset-y-1 bg-white/10 border border-white/12 rounded-full z-0 pointer-events-none"
-                        />
-                      )}
-                      
-                      <div className="relative z-10 flex flex-col items-center justify-center">
-                        <Icon className={`h-4.5 w-4.5 transition-transform duration-200 ${
-                          isActive 
-                            ? "text-[#90d689] scale-110" 
-                            : "text-gray-400 group-hover:text-white group-hover:scale-105"
-                        }`} />
-                        <span className={`text-[9px] font-extrabold tracking-tight mt-0.5 transition-colors ${
-                          isActive 
-                            ? "text-[#90d689]" 
-                            : "text-gray-500 group-hover:text-white"
-                        }`}>
-                          {tab.label}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              <AnimatedDock
+                className="bg-transparent border-none shadow-none h-full pb-0.5 px-0 w-full gap-2 items-center"
+                items={dockItems}
+              />
             </motion.div>
           )}
         </AnimatePresence>

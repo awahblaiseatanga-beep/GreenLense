@@ -251,6 +251,12 @@ export default function App() {
               <ExploreTab 
                 catalogs={catalogs} 
                 onSelectCatalog={(cat) => setSelectedCatalog(cat)} 
+                onNavigateToInsights={(anchorId) => {
+                  if (anchorId) {
+                    window.location.hash = anchorId;
+                  }
+                  setActiveTab("insights");
+                }}
               />
             )}
             {activeTab === "contribute" && (
@@ -270,7 +276,10 @@ export default function App() {
               />
             )}
             {activeTab === "insights" && (
-              <InsightsTab catalogs={catalogs} />
+              <InsightsTab 
+                catalogs={catalogs} 
+                onSelectCatalog={(cat) => setSelectedCatalog(cat)} 
+              />
             )}
             {activeTab === "profile" && userStats && (
               <ProfileTab 

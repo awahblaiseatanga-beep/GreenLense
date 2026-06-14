@@ -1487,21 +1487,35 @@ async function startServer() {
     let dailyScore = 50;
 
     if (transportMode === "Walking/Biking/Public Transit") dailyScore += 25;
-    if (transportMode === "Shared Taxi / Carpooling") dailyScore += 15;
-    if (wasteSegregation) dailyScore += 15;
-    if (organicComposting) dailyScore += 15;
+    else if (transportMode === "Shared Taxi / Carpooling") dailyScore += 15;
+    else if (transportMode === "Single Occupancy Vehicle") dailyScore += 0;
+    else if (transportMode && transportMode.trim().length > 0) dailyScore += 20;
+
+    if (wasteSegregation === true || wasteSegregation === "yes" || (typeof wasteSegregation === "string" && wasteSegregation.trim().length > 0 && wasteSegregation !== "no")) dailyScore += 15;
+    if (organicComposting === true || organicComposting === "yes" || (typeof organicComposting === "string" && organicComposting.trim().length > 0 && organicComposting !== "no")) dailyScore += 15;
+
     if (plasticReduction === "Strict Avoidance") dailyScore += 15;
-    if (plasticReduction === "Regular Reuse") dailyScore += 10;
-    if (energyConserved) dailyScore += 10;
+    else if (plasticReduction === "Regular Reuse") dailyScore += 10;
+    else if (plasticReduction === "None / Average Disposal") dailyScore += 0;
+    else if (plasticReduction && plasticReduction.trim().length > 0) dailyScore += 12;
+
+    if (energyConserved === true || energyConserved === "yes" || (typeof energyConserved === "string" && energyConserved.trim().length > 0 && energyConserved !== "no")) dailyScore += 10;
 
     // Calculate simulated Carbon footprint impact (kg CO2 estimate)
     const baseFootprint = 140; // baseline Cameroon citizen per week
     let reduction = 0;
     if (transportMode === "Walking/Biking/Public Transit") reduction += 30;
-    if (wasteSegregation) reduction += 10;
-    if (organicComposting) reduction += 15;
+    else if (transportMode === "Shared Taxi / Carpooling") reduction += 15;
+    else if (transportMode && transportMode !== "Single Occupancy Vehicle" && transportMode.trim().length > 0) reduction += 20;
+
+    if (wasteSegregation === true || wasteSegregation === "yes" || (typeof wasteSegregation === "string" && wasteSegregation.trim().length > 0 && wasteSegregation !== "no")) reduction += 10;
+    if (organicComposting === true || organicComposting === "yes" || (typeof organicComposting === "string" && organicComposting.trim().length > 0 && organicComposting !== "no")) reduction += 15;
+
     if (plasticReduction === "Strict Avoidance") reduction += 20;
-    if (energyConserved) reduction += 15;
+    else if (plasticReduction === "Regular Reuse") reduction += 10;
+    else if (plasticReduction && plasticReduction !== "None / Average Disposal" && plasticReduction.trim().length > 0) reduction += 12;
+
+    if (energyConserved === true || energyConserved === "yes" || (typeof energyConserved === "string" && energyConserved.trim().length > 0 && energyConserved !== "no")) reduction += 15;
 
     // Save Live Supabase Stats
     try {

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { ListCollapse, Plus, Sparkles, Building2, Eye, ShieldCheck, Mail, Phone, Calendar, ArrowRight, CheckCircle2, Award, ArrowUpRight, Loader } from "lucide-react";
+import { ListCollapse, Plus, Sparkles, Building2, Eye, ShieldCheck, Mail, Phone, Calendar, ArrowRight, CheckCircle2, Award, ArrowUpRight, Loader, Search } from "lucide-react";
 import { EnvironmentalCatalog, Campaign, Organization } from "../types";
 
 const CAMPAIGN_PRESET_IMAGES = [
@@ -73,17 +73,33 @@ export default function ImpactTab({
   const [orgDesc, setOrgDesc] = useState("");
   const [isOrgCreating, setIsOrgCreating] = useState(false);
 
-  // Gather all completed campaigns from the pre-seeded catalog registry to show in the Before/After comparing grid
-  const allCompletedCampaigns: Campaign[] = [];
-  catalogs.forEach(cat => {
-    if (cat.campaigns) {
-      cat.campaigns.forEach(camp => {
-        if (camp.status === "Completed") {
-          allCompletedCampaigns.push(camp);
-        }
-      });
-    }
-  });
+  // Enforce a single high-quality static sample campaign signifying the app's real purpose: Cameroon environmental restoration
+  const sampleCompletedCampaign: Campaign = {
+    id: "sample-restoration-melen",
+    title: "Melen Drainage Channel Restoration & Plastic Sorting Drive",
+    organizationName: "Association Eco-Cameroon",
+    catalogId: "LOC_MLN_YAO_CEN_CMR",
+    description: "Melen youth groups mobilized to restore natural flow on the blocked secondary drainage channel, successfully extracting 340kg of congested polyethylene plastics and installing custom mesh trash collection traps.",
+    startDate: "2026-06-10",
+    endDate: "2026-06-13",
+    status: "Completed",
+    beforeImage: "https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=600&q=80", // Real plastic dumpsite in Cameroon context
+    afterImage: "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&w=600&q=80", // Pristine clear stream flowing in nature
+    verifications: [],
+    verifiedImprovementScore: 85,
+    verificationsCount: 0
+  };
+
+  const allCompletedCampaigns: Campaign[] = [sampleCompletedCampaign];
+
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredCampaigns = allCompletedCampaigns.filter(camp => 
+    camp.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    camp.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    camp.organizationName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    camp.catalogId.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Handle Voting community verification
   const handleCastingVote = async (campaignId: string, level: "Significant" | "Moderate" | "Little" | "No") => {
@@ -227,14 +243,40 @@ export default function ImpactTab({
             <h3 className="text-lg font-black text-gray-950">Community Verification Auditing</h3>
           </div>
 
-          {allCompletedCampaigns.length === 0 ? (
-            <div className="p-10 text-center bg-white rounded-xl border border-dashed border-gray-200" id="no-campaigns-voting-card">
+          {/* Moved Search Bar Field as requested to align perfectly with the feed */}
+          <div className="relative flex items-center p-1 bg-white rounded-xl border border-gray-200 shadow-xs" id="campaign-search-form">
+            <div className="relative flex-1 flex items-center pl-3">
+              <Search className="h-4.5 w-4.5 text-gray-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Search completed feeds or organizations (e.g., Melen, Eco-Cameroon)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-2 pr-2 py-2 text-xs md:text-sm bg-transparent border-0 focus:outline-0 focus:ring-0 text-gray-800"
+                id="campaign-search-input"
+              />
+            </div>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="text-gray-450 hover:text-gray-700 px-3.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider transition-all"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {filteredCampaigns.length === 0 ? (
+            <div className="p-10 text-center bg-white rounded-xl border border-dashed border-gray-200 animate-fade-in" id="no-campaigns-voting-card">
               <Building2 className="h-10 w-10 text-gray-400 mx-auto mb-2" />
-              <p className="text-xs text-gray-400">No completed campaigns currently seeking community verification votes.</p>
+              <p className="text-xs text-gray-400 font-mono">
+                {searchQuery ? "No matching sample feeds found" : "No completed campaigns currently seeking community verification votes."}
+              </p>
             </div>
           ) : (
             <div className="space-y-8" id="verification-cards-feed">
-              {allCompletedCampaigns.map((camp) => {
+              {filteredCampaigns.map((camp) => {
                 const alreadyVoted = verificationVotedIds.includes(camp.id);
                 return (
                   <div 

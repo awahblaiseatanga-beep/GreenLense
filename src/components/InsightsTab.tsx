@@ -4,15 +4,17 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Sparkles, BarChart3, TrendingUp, AlertOctagon, HelpCircle, ArrowUpRight, Loader, RefreshCw, Layers, CheckCircle2 } from "lucide-react";
+import { Sparkles, BarChart3, TrendingUp, AlertOctagon, HelpCircle, ArrowUpRight, Loader, RefreshCw, Layers, CheckCircle2, Users, ChevronRight } from "lucide-react";
 import { EnvironmentalCatalog } from "../types";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 
 interface InsightsTabProps {
   catalogs: EnvironmentalCatalog[];
+  onSelectCatalog?: (catalog: EnvironmentalCatalog) => void;
 }
 
-export default function InsightsTab({ catalogs }: InsightsTabProps) {
+export default function InsightsTab({ catalogs, onSelectCatalog }: InsightsTabProps) {
+  const featuredFeeds = catalogs.slice(0, 5);
   const [aiAnalysisSummary, setAiAnalysisSummary] = useState("");
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
   const [advisorQuery, setAdvisorQuery] = useState("");
@@ -41,6 +43,19 @@ export default function InsightsTab({ catalogs }: InsightsTabProps) {
   useEffect(() => {
     fetchSummary();
   }, [catalogs]);
+
+  useEffect(() => {
+    const handleScrollToCheck = () => {
+      if (window.location.hash === "#insights-feeds") {
+        const target = document.getElementById("insights-feeds");
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth" });
+        }
+      }
+    };
+    const timer = setTimeout(handleScrollToCheck, 400);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Handle Advisor Consultation query
   const handleAdvisorConsult = async (e: React.FormEvent) => {
@@ -277,6 +292,127 @@ export default function InsightsTab({ catalogs }: InsightsTabProps) {
         </div>
 
       </div>
+
+      {/* Migrated Featured Catalogs & Feeds Section */}
+      <div className="pt-8 border-t border-gray-200 space-y-6" id="insights-feeds">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3" id="insights-feed-header">
+          <div>
+            <span className="text-[10px] font-mono font-bold tracking-widest text-primary uppercase block">
+              Curated Community Grids
+            </span>
+            <h2 className="text-xl font-extrabold tracking-tight text-gray-900">
+              Featured Regional Catalogs &amp; Feeds
+            </h2>
+          </div>
+          <span className="text-[10px] bg-emerald-50 text-primary border border-emerald-100 font-mono font-extrabold px-3 py-1 rounded-full uppercase self-start sm:self-center shrink-0">
+            Exactly 5 Active Channels
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="insights-catalogs-grid">
+          {featuredFeeds.map((catalog) => {
+            const recentObservation = catalog.observations[0];
+            return (
+              <div
+                key={catalog.id}
+                onClick={() => onSelectCatalog && onSelectCatalog(catalog)}
+                className="group bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:border-accent hover:shadow-md transition-all duration-300 cursor-pointer flex flex-col justify-between"
+                id={`insights-catalog-card-${catalog.id}`}
+              >
+                <div>
+                  {/* Image header with verified design badge */}
+                  <div className="relative h-44 bg-gray-100 overflow-hidden" id={`insights-card-media-wrapper-${catalog.id}`}>
+                    <img
+                      src={recentObservation?.photoUrl || "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80"}
+                      alt={catalog.neighborhood}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="absolute top-3 left-3 flex gap-1.5">
+                      <span className={`text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-1.5 rounded text-white ${
+                        catalog.envScore >= 75 ? "bg-primary" : catalog.envScore >= 50 ? "bg-amber-600" : "bg-red-700"
+                      }`} id={`insights-card-verified-badge-${catalog.id}`}>
+                        {catalog.envScore >= 75 ? "Verified Safe" : catalog.envScore >= 50 ? "Community Managed" : "Heavy Risk Zone"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Content Area */}
+                  <div className="p-5 space-y-4" id={`insights-card-content-${catalog.id}`}>
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900 group-hover:text-primary transition-colors line-clamp-1">
+                        {catalog.neighborhood}, {catalog.city}
+                      </h3>
+                      <span className="text-[11px] font-mono tracking-tight text-gray-400 font-medium block">
+                        LAT {catalog.coordinates.lat.toFixed(4)}° N • LON {catalog.coordinates.lon.toFixed(4)}° E
+                      </span>
+                    </div>
+
+                    {/* Environmental Score Progress bar */}
+                    <div className="space-y-1.5" id={`insights-card-score-wrapper-${catalog.id}`}>
+                      <div className="flex justify-between text-xs" id={`insights-score-text-inner-${catalog.id}`}>
+                        <span className="text-gray-500 font-semibold text-[11px]">Eco Score</span>
+                        <span className="font-bold text-gray-900 font-mono text-[11px]">{catalog.envScore}/100</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden" id={`insights-progress-container-${catalog.id}`}>
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            catalog.envScore >= 75 ? "bg-primary" : catalog.envScore >= 50 ? "bg-amber-600" : "bg-red-700"
+                          }`}
+                          style={{ width: `${catalog.envScore}%` }}
+                          id={`insights-progress-bar-fill-${catalog.id}`}
+                        />
+                      </div>
+
+                      {/* Area Dirtiness Indicator */}
+                      <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs" id={`insights-card-dirtiness-indicator-${catalog.id}`}>
+                        <div className="flex flex-col">
+                          <span className="text-gray-400 text-[9px] font-bold uppercase tracking-wider font-mono">Area Dirtiness</span>
+                          <span className="font-black text-gray-800 text-xs">
+                            {catalog.dirtinessScore === "Insufficient Data" ? "Insufficient Data" : `${catalog.dirtinessScore}/100`}
+                          </span>
+                        </div>
+                        <div className="text-right flex flex-col items-end">
+                          <span className="text-gray-400 text-[9px] font-bold uppercase tracking-wider font-mono">Trend</span>
+                          <span className={`text-[8px] font-extrabold px-1 py-0.5 rounded-sm uppercase tracking-wide
+                            ${catalog.dirtinessTrend === "Improving" 
+                              ? "bg-emerald-100 text-emerald-850"
+                              : catalog.dirtinessTrend === "Getting Worse"
+                              ? "bg-red-105 text-red-800"
+                              : catalog.dirtinessTrend === "Stable"
+                              ? "bg-blue-100 text-blue-805"
+                              : "bg-gray-100 text-gray-505"}`}
+                          >
+                            {catalog.dirtinessTrend === "Insufficient Data" ? "N/A" : catalog.dirtinessTrend}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Meta statistics footer */}
+                      <div className="flex justify-between items-center text-[9px] text-gray-450 font-mono tracking-wider pt-2 border-t border-gray-100 mt-1">
+                        <span>REPORTS: {catalog.observations?.length || 0}</span>
+                        <span>UPDATED: {catalog.lastUpdated || "N/A"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card Status Footer */}
+                <div className="bg-gray-50 p-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 font-medium" id={`insights-card-footer-${catalog.id}`}>
+                  <span className="flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                    {catalog.activeCampaignsCount} Campaigns
+                  </span>
+                  <span className="text-primary font-bold inline-flex items-center gap-0.5 group-hover:underline">
+                    Explore &rarr;
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
     </div>
   );
 }

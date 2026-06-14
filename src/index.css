@@ -20,19 +20,13 @@ body {
   overflow-x: hidden;
 }
 
-/* Custom modern scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Hide scrollbars globally while retaining scroll functionality */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE, Edge */
 }
-::-webkit-scrollbar-track {
-  background: #f1eded;
-}
-::-webkit-scrollbar-thumb {
-  background: #c0c9bb;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #717a6d;
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, and Opera */
 }
 

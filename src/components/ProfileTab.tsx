@@ -6,6 +6,68 @@
 import React, { useState } from "react";
 import { UserStats, EcoPulseCheckIn } from "../types";
 import { Award, Zap, Navigation, Trash2, Leaf, Shield, CheckCircle2, Flame, Loader, RefreshCw, BarChart, Info } from "lucide-react";
+import { ProfileCard } from "./ui/profile-card";
+import { QuestionTool, QuestionConfig, QuestionAnswer } from "./ui/question-tool";
+
+const ECO_PULSE_QUESTIONS: QuestionConfig[] = [
+  {
+    kind: "single",
+    allowCustom: true,
+    title: "How did you commute today?",
+    description: "Your selection of shared or zero-emission travel prevents regional congestion and vehicle soot.",
+    customPlaceholder: "Or type your customized transit method...",
+    options: [
+      { id: "Walking/Biking/Public Transit", label: "Walking, Bicycle, or Public Transit (Bus/Transcam)", description: "+25 Score, -30kg CO₂ potential" },
+      { id: "Shared Taxi / Carpooling", label: "Shared Yellow Cab or Carpooling", description: "+15 Score, -0kg CO₂ potential" },
+      { id: "Single Occupancy Vehicle", label: "Solo Personal Car or Private Moto Taxi", description: "+0 Score, +0kg CO₂ baseline" }
+    ]
+  },
+  {
+    kind: "single",
+    allowCustom: true,
+    title: "Plastic packaging reduction approach",
+    description: "Plastic wrapping discarded in public spaces clogs district gutters, causing major flash floods.",
+    customPlaceholder: "Or describe custom plastic-free method...",
+    options: [
+      { id: "Strict Avoidance", label: "Strict Avoidance (Carried reusable bag)", description: "+15 Score, -20kg CO₂" },
+      { id: "Regular Reuse", label: "Regular Reuse (Stored plastic bottles for recycling)", description: "+10 Score, -0kg CO₂" },
+      { id: "None / Average Disposal", label: "Normal mixed municipal waste dump", description: "+0 Score, +0kg CO₂" }
+    ]
+  },
+  {
+    kind: "single",
+    allowCustom: true,
+    title: "Eco Separation: Did you isolate organic waste?",
+    description: "Separating organic food waste allows clean localized agricultural compost schemes to proceed.",
+    customPlaceholder: "Or write other segregation method...",
+    options: [
+      { id: "yes", label: "Yes, isolated all organic scrap items today", description: "+15 Score, -10kg CO₂" },
+      { id: "no", label: "No organic separations practiced today", description: "+0 Score, +0kg CO₂" }
+    ]
+  },
+  {
+    kind: "single",
+    allowCustom: true,
+    title: "Eco Agriculture: Did you compost biodegradable waste?",
+    description: "Dumping food in landfills generates methane; feedback compost directly to garden soil.",
+    customPlaceholder: "Or specify custom composting action...",
+    options: [
+      { id: "yes", label: "Yes, composted organic waste back into soil pits", description: "+15 Score, -15kg CO₂" },
+      { id: "no", label: "No agricultural backyard soil feeding today", description: "+0 Score, +0kg CO₂" }
+    ]
+  },
+  {
+    kind: "single",
+    allowCustom: true,
+    title: "Active Grid Energy: Did you practice curtailments?",
+    description: "Turning off active unused sockets, fluorescent lights, and grids decreases city blackouts.",
+    customPlaceholder: "Or specify other curtailment steps...",
+    options: [
+      { id: "yes", label: "Yes, cutoff active sockets, bulbs, or charging rigs", description: "+10 Score, -15kg CO₂" },
+      { id: "no", label: "No energy curtailments setup today" }
+    ]
+  }
+];
 
 interface ProfileTabProps {
   userStats: UserStats;
@@ -13,11 +75,11 @@ interface ProfileTabProps {
 }
 
 export default function ProfileTab({ userStats, onEcoPulseSubmitted }: ProfileTabProps) {
-  const [transportMode, setTransportMode] = useState("Walking/Biking/Public Transit");
-  const [wasteSegregation, setWasteSegregation] = useState(false);
-  const [organicComposting, setOrganicComposting] = useState(false);
-  const [plasticReduction, setPlasticReduction] = useState("Regular Reuse");
-  const [energyConserved, setEnergyConserved] = useState(false);
+  const [transportMode, setTransportMode] = useState<string>("Walking/Biking/Public Transit");
+  const [wasteSegregation, setWasteSegregation] = useState<any>("no");
+  const [organicComposting, setOrganicComposting] = useState<any>("no");
+  const [plasticReduction, setPlasticReduction] = useState<string>("Regular Reuse");
+  const [energyConserved, setEnergyConserved] = useState<any>("no");
   const [isSyncing, setIsSyncing] = useState(false);
   const [pulseSubmitted, setPulseSubmitted] = useState(false);
 
@@ -36,9 +98,72 @@ export default function ProfileTab({ userStats, onEcoPulseSubmitted }: ProfileTa
   const nextTargetXP = userStats.xp < 100 ? 100 : userStats.xp < 250 ? 250 : userStats.xp < 500 ? 500 : userStats.xp < 1000 ? 1000 : 2500;
   const progressPercent = Math.min(100, Math.round((userStats.xp / nextTargetXP) * 100));
 
+  // Dynamic Simulator: Calculates user's prospective eco score as options change
+  const getLiveEcoPulseScore = () => {
+    let dailyScore = 50;
+
+    // Transport Mode Today
+    if (transportMode === "Walking/Biking/Public Transit") dailyScore += 25;
+    else if (transportMode === "Shared Taxi / Carpooling") dailyScore += 15;
+    else if (transportMode === "Single Occupancy Vehicle") dailyScore += 0;
+    else if (transportMode && transportMode.trim().length > 0) dailyScore += 20; // rewarding custom input!
+
+    // Waste Separation
+    if (wasteSegregation === true || wasteSegregation === "yes") dailyScore += 15;
+    else if (typeof wasteSegregation === "string" && wasteSegregation.trim().length > 0 && wasteSegregation !== "no") dailyScore += 15; // custom action
+
+    // Organic Composting
+    if (organicComposting === true || organicComposting === "yes") dailyScore += 15;
+    else if (typeof organicComposting === "string" && organicComposting.trim().length > 0 && organicComposting !== "no") dailyScore += 15; // custom action
+
+    // Plasticpackaging approach
+    if (plasticReduction === "Strict Avoidance") dailyScore += 15;
+    else if (plasticReduction === "Regular Reuse") dailyScore += 10;
+    else if (plasticReduction === "None / Average Disposal") dailyScore += 0;
+    else if (plasticReduction && plasticReduction.trim().length > 0) dailyScore += 12; // custom action
+
+    // Energy Curtailment
+    if (energyConserved === true || energyConserved === "yes") dailyScore += 10;
+    else if (typeof energyConserved === "string" && energyConserved.trim().length > 0 && energyConserved !== "no") dailyScore += 10; // custom action
+
+    return Math.min(100, dailyScore);
+  };
+
+  const getLiveCarbonFootprint = () => {
+    const baseFootprint = 140; // baseline Cameroon citizen per week
+    let reduction = 0;
+
+    // Transport
+    if (transportMode === "Walking/Biking/Public Transit") reduction += 30;
+    else if (transportMode === "Shared Taxi / Carpooling") reduction += 15;
+    else if (transportMode && transportMode !== "Single Occupancy Vehicle" && transportMode.trim().length > 0) reduction += 20;
+
+    // Waste Separation
+    if (wasteSegregation === true || wasteSegregation === "yes") reduction += 10;
+    else if (typeof wasteSegregation === "string" && wasteSegregation.trim().length > 0 && wasteSegregation !== "no") reduction += 10;
+
+    // Organic Composting
+    if (organicComposting === true || organicComposting === "yes") reduction += 15;
+    else if (typeof organicComposting === "string" && organicComposting.trim().length > 0 && organicComposting !== "no") reduction += 15;
+
+    // Plastic approach
+    if (plasticReduction === "Strict Avoidance") reduction += 20;
+    else if (plasticReduction === "Regular Reuse") reduction += 10;
+    else if (plasticReduction && plasticReduction !== "None / Average Disposal" && plasticReduction.trim().length > 0) reduction += 12;
+
+    // Energy Curtailment
+    if (energyConserved === true || energyConserved === "yes") reduction += 15;
+    else if (typeof energyConserved === "string" && energyConserved.trim().length > 0 && energyConserved !== "no") reduction += 15;
+
+    return Math.max(25, baseFootprint - reduction);
+  };
+
+  const activeLiveScore = getLiveEcoPulseScore();
+  const activeLiveCarbon = getLiveCarbonFootprint();
+
   // Submit daily EcoPulse check-in
-  const handlePulseSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePulseSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setIsSyncing(true);
 
     try {
@@ -75,234 +200,130 @@ export default function ProfileTab({ userStats, onEcoPulseSubmitted }: ProfileTa
     }
   };
 
+  const handleAnswerSubmitted = (answer: QuestionAnswer, index: number) => {
+    const selectedValue = answer.selectedIds?.[0] || answer.text;
+    if (!selectedValue) return;
+
+    if (index === 1) {
+      setTransportMode(selectedValue);
+    } else if (index === 2) {
+      setPlasticReduction(selectedValue);
+    } else if (index === 3) {
+      setWasteSegregation(selectedValue === "yes" || (selectedValue !== "no" && typeof selectedValue === "string"));
+    } else if (index === 4) {
+      setOrganicComposting(selectedValue === "yes" || (selectedValue !== "no" && typeof selectedValue === "string"));
+    } else if (index === 5) {
+      setEnergyConserved(selectedValue === "yes" || (selectedValue !== "no" && typeof selectedValue === "string"));
+    }
+  };
+
   return (
     <div className="space-y-8" id="profile-tab-view">
       
-      {/* Dynamic Profile Cover Banner */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm pt-4" id="profile-card">
-        <div className="h-28 relative overflow-hidden" id="profile-background">
-          <img 
-            src="https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&w=1200&q=80" 
-            alt="Cameroon Horizon Greenery" 
-            className="w-full h-full object-cover brightness-75"
-            referrerPolicy="no-referrer"
+      {/* Dynamic Grid: Profile Card on Left, Digital Credentials & Insights on Right */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start" id="profile-identity-grid">
+        {/* Left Column: Adapted High-Polish ProfileCard */}
+        <div className="md:col-span-5 lg:col-span-4" id="profile-card-column">
+          <ProfileCard
+            name={userStats.fullName}
+            title={userStats.level}
+            avatarUrl=""
+            backgroundUrl="https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80"
+            likes={userStats.verificationsCount}
+            posts={userStats.contributionsCount}
+            views={pulseSubmitted ? userStats.ecoPulseScore : activeLiveScore}
+            instagramUrl="https://instagram.com/greenlens_cameroon"
+            twitterUrl="https://twitter.com/greenlens_cm"
+            threadsUrl="https://threads.net/@greenlens_cameroon"
+            levelProgress={progressPercent}
+            xpText={`Rank Progress: ${userStats.xp} / ${nextTargetXP} XP`}
+            roleDescription={currentLevelInfo.desc}
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/30 to-accent/30 mix-blend-multiply" />
-          <div className="absolute -bottom-6 left-6 h-16 w-16 bg-white rounded-full flex items-center justify-center p-1 shadow-sm" id="user-avatar">
-            <div className="h-full w-full bg-emerald-100 text-primary font-black flex items-center justify-center rounded-full text-base">
-              {userStats.fullName.split(" ").map(x => x[0]).join("")}
-            </div>
-          </div>
         </div>
 
-        {/* User Stats Summary block */}
-        <div className="p-6 pt-8 space-y-6" id="profile-details">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4" id="user-primary-row">
-            <div>
-              <h3 className="text-xl font-extrabold text-gray-950">{userStats.fullName}</h3>
-              <span className="text-xs text-mono text-gray-400 font-semibold">{userStats.email}</span>
+        {/* Right Column: Digital Registrar Badge & Carbon Savings Index Panel */}
+        <div className="md:col-span-7 lg:col-span-8 bg-white rounded-[2rem] border border-gray-200 shadow-sm p-6 lg:p-8 space-y-6 flex flex-col justify-between min-h-[440px]" id="profile-credentials-panel">
+          <div className="space-y-5" id="credentials-inner">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4" id="credentials-header">
+              <div>
+                <span className="text-[10px] font-mono font-bold tracking-widest text-primary uppercase block">
+                  Official GreenLens Registrar ID
+                </span>
+                <h3 className="text-lg font-black text-gray-900 tracking-tight">Ranger Intelligence Hub</h3>
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-full text-[10px] font-mono font-extrabold text-primary uppercase" id="ranger-online-badge">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>{pulseSubmitted ? "Stats Synchronized" : "Preview Tracking"}</span>
+              </div>
             </div>
-            
-            {/* Level Badge */}
-            <div className={`px-4 py-2 rounded-xl border text-xs font-bold font-mono tracking-tight text-center ${currentLevelInfo.bg}`} id="user-level-badge">
-              <span className="block uppercase text-[9px] text-gray-400 leading-none">Intelligence Status</span>
-              <span className={`text-xs font-black ${currentLevelInfo.color}`}>{userStats.level}</span>
+
+            {/* Credential Data Table */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-medium" id="credentials-data-grid">
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider font-mono">Email Registration</span>
+                <span className="text-gray-900 font-bold block truncate">{userStats.email}</span>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider font-mono">Autonomous ID</span>
+                <span className="text-gray-900 font-bold block font-mono">GL-REG-4491-CM</span>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider font-mono">Territory Coordinates</span>
+                <span className="text-gray-900 font-bold block font-mono">Cameroon Autonomous Hubs</span>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider font-mono">Ecological Rank Status</span>
+                <span className="text-gray-900 font-bold block">{userStats.level} Rank</span>
+              </div>
+            </div>
+
+            {/* Carbon estimate indicator */}
+            <div className="p-4 bg-gradient-to-br from-[#00450d] to-[#011a05] rounded-2xl border border-emerald-800/20 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm" id="weekly-carbon-card">
+              <div className="space-y-1" id="carbon-lead-text">
+                <div className="flex items-center gap-2 text-emerald-400 font-mono text-[10px] font-extrabold uppercase tracking-widest">
+                  <Leaf className="h-4 w-4 shrink-0" />
+                  <span>Carbon Mitigation Level</span>
+                </div>
+                <h4 className="text-sm font-extrabold text-white animate-pulse">Dynamic footprint estimation metrics</h4>
+                <p className="text-xs text-emerald-100/75 leading-relaxed max-w-sm">
+                  Your logged activities contribute to offset emissions across Cameroon capital districts.
+                </p>
+              </div>
+              <div className="text-center sm:text-right shrink-0 bg-[#002607] p-4 rounded-xl border border-emerald-800/30 min-w-[145px]" id="carbon-display-badge">
+                <span className="text-[10px] text-emerald-300 font-bold uppercase tracking-widest font-mono block">Weekly CO₂</span>
+                <span className="text-3xl font-black text-white font-mono block leading-none pt-1">
+                  -{pulseSubmitted ? userStats.carbonFootprint : activeLiveCarbon}
+                </span>
+                <span className="text-[10px] text-emerald-300 font-bold uppercase tracking-wide font-mono block">kg emissions</span>
+              </div>
             </div>
           </div>
 
-          <p className="text-xs text-gray-500 max-w-xl leading-relaxed" id="level-description">
-            <span className="font-bold text-gray-700">Role:</span> {currentLevelInfo.desc}
-          </p>
-
-          {/* XP Progress Bar */}
-          <div className="space-y-1.5" id="xp-panel">
-            <div className="flex justify-between text-xs font-bold text-gray-400 font-mono" id="xp-thresholds">
-              <span>{userStats.xp} XP Accumulate</span>
-              <span>Next Rank: {nextTargetXP} XP</span>
-            </div>
-            <div className="h-3 bg-gray-100 rounded-full overflow-hidden" id="xp-level-progress-bar">
-              <div 
-                className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Quick Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2" id="quick-stats-grid">
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 text-center" id="stat-obs">
-              <span className="text-[10px] uppercase font-bold text-gray-400 font-mono block">Observations Reported</span>
-              <span className="text-xl font-black text-gray-900 font-mono">{userStats.contributionsCount}</span>
-            </div>
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 text-center" id="stat-verifier">
-              <span className="text-[10px] uppercase font-bold text-gray-400 font-mono block">Verifications Audited</span>
-              <span className="text-xl font-black text-gray-900 font-mono">{userStats.verificationsCount}</span>
-            </div>
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 text-center" id="stat-pulse">
-              <span className="text-[10px] uppercase font-bold text-gray-400 font-mono block">EcoPulse Index</span>
-              <span className="text-xl font-black text-[#1b6d24] font-mono">{userStats.ecoPulseScore}/100</span>
-            </div>
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 text-center" id="stat-footprint">
-              <span className="text-[10px] uppercase font-bold text-gray-400 font-mono block">Weekly CO2 Estimate</span>
-              <span className="text-xl font-black text-amber-700 font-mono">{userStats.carbonFootprint} kg</span>
+          {/* Level status next task banner */}
+          <div className="p-4 bg-amber-50/50 border border-amber-100 rounded-2xl text-xs text-amber-900 flex items-center justify-between gap-3 font-medium shadow-inner" id="ranger-next-rank-prompt">
+            <div className="flex items-center gap-2.5">
+              <Award className="h-5 w-5 text-amber-600 shrink-0" />
+              <div>
+                <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-amber-800 block">XP Accomplishment Goal</span>
+                <span className="text-gray-700 leading-tight block">
+                  Accumulate <span className="text-[#00450d] font-bold font-mono">{nextTargetXP - userStats.xp} more XP</span> to trigger verification authority upgrades.
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Grid: 30-Second EcoPulse Check-In Widget */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8" id="ecopulse-outer-grid">
-        
-        {/* Left Span: Entry Form Form */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-6" id="pulse-wizard">
-          <div className="flex items-center gap-2.5 border-b border-gray-100 pb-3" id="pulse-header">
-            <Flame className="h-5 w-5 text-primary shrink-0" />
-            <div>
-              <h3 className="text-base font-black text-gray-950">EcoPulse: Daily 30sec Sustainability Check</h3>
-              <span className="text-[10px] text-gray-400 font-medium">Log daily footprint behaviours to establish catalog weights.</span>
-            </div>
-          </div>
-
-          <form onSubmit={handlePulseSubmit} className="space-y-4" id="pulse-form">
-            
-            {/* Field 1: Transport */}
-            <div className="space-y-1">
-              <label className="text-xs font-extrabold text-gray-500 uppercase tracking-wider font-mono">1. Transport Mode Today</label>
-              <select
-                value={transportMode}
-                onChange={(e) => setTransportMode(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-205 rounded-lg p-2.5 text-xs font-semibold text-gray-800 cursor-pointer focus:bg-white focus:outline-0 transition-all"
-              >
-                <option value="Walking/Biking/Public Transit">Walking, Pedal Cycle, or Shared Bus (Transcam)</option>
-                <option value="Shared Taxi / Carpooling">Shared Yellow Cab / Carpooling Car</option>
-                <option value="Single Occupancy Vehicle">Personal Single Occupant Car / Moto Taxi</option>
-              </select>
-            </div>
-
-            {/* Field 4: Plastic */}
-            <div className="space-y-1">
-              <label className="text-xs font-extrabold text-gray-500 uppercase tracking-wider font-mono">2. Single-use Plastics Discard approach</label>
-              <select
-                value={plasticReduction}
-                onChange={(e) => setPlasticReduction(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-205 rounded-lg p-2.5 text-xs font-semibold text-gray-800 cursor-pointer focus:bg-white focus:outline-0 transition-all"
-              >
-                <option value="Strict Avoidance">Strict Avoidance (Carried reusable canvas bag)</option>
-                <option value="Regular Reuse">Regular Reuse (Segregated plastic bottles for recycling)</option>
-                <option value="None / Average Disposal">Normal Disposal (Discarded wrapper in municipal mix bin)</option>
-              </select>
-            </div>
-
-            {/* Checklist Options */}
-            <div className="space-y-2.5 pt-1" id="pulse-checklist">
-              <label className="text-xs font-extrabold text-gray-500 uppercase tracking-wider font-mono block">3. Domestic Action List</label>
-              
-              {/* Segregation */}
-              <label className="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all">
-                <input
-                  type="checkbox"
-                  checked={wasteSegregation}
-                  onChange={(e) => setWasteSegregation(e.target.checked)}
-                  className="h-4 w-4 text-primary focus:ring-0 border-gray-300 rounded cursor-pointer"
-                />
-                <div>
-                  <span className="text-xs font-bold text-gray-800 block">Waste Separation</span>
-                  <p className="text-[10px] text-gray-500">I separated organic agricultural food scraps from non-biodegradable solids.</p>
-                </div>
-              </label>
-
-              {/* Composting */}
-              <label className="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all">
-                <input
-                  type="checkbox"
-                  checked={organicComposting}
-                  onChange={(e) => setOrganicComposting(e.target.checked)}
-                  className="h-4 w-4 text-primary focus:ring-0 border-gray-300 rounded cursor-pointer"
-                />
-                <div>
-                  <span className="text-xs font-bold text-gray-800 block">Organic Composting</span>
-                  <p className="text-[10px] text-gray-500">I directed biodegradable kitchen compost back to gardening soil pits.</p>
-                </div>
-              </label>
-
-              {/* Energy Conserved */}
-              <label className="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all">
-                <input
-                  type="checkbox"
-                  checked={energyConserved}
-                  onChange={(e) => setEnergyConserved(e.target.checked)}
-                  className="h-4 w-4 text-primary focus:ring-0 border-gray-300 rounded cursor-pointer"
-                />
-                <div>
-                  <span className="text-xs font-bold text-gray-800 block">Energy Curtailment</span>
-                  <p className="text-[10px] text-gray-500">I turned off unnecessary electronic grids, bulbs, or charging sockets.</p>
-                </div>
-              </label>
-            </div>
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={isSyncing}
-              className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-200 text-white font-bold text-xs py-3 rounded-lg flex items-center justify-center gap-1.5 uppercase tracking-wider transition-all"
-              id="pulse-submit-btn"
-            >
-              {isSyncing ? <Loader className="h-4 w-4 animate-spin text-white" /> : <Zap className="h-4 w-4 text-amber-300 fill-amber-300" />}
-              <span>Sync EcoPulse Score</span>
-            </button>
-
-          </form>
-        </div>
-
-        {/* Right Span: AI Results and Tips Feed */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-4" id="pulse-output">
-          <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-gray-400">Footprint Feedback & Recommendations</h3>
-
-          {pulseSubmitted ? (
-            /* Submitted feedback */
-            <div className="space-y-6 animate-fadeIn" id="submitted-feedback-card">
-              <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-3" id="feedback-highlight">
-                <div className="flex items-center gap-2" id="feedback-heading">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                  <span className="text-xs font-extrabold text-emerald-800 font-mono uppercase">Synchronization Safe</span>
-                </div>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  Your daily environmental behaviors have been compiled on our server data tables. Your revised Ecological index represents <span className="text-primary font-bold">{userStats.ecoPulseScore}/100</span>, which is above average for Cameroon capital districts.
-                </p>
-              </div>
-
-              {/* Eco Suggestions List */}
-              <div className="space-y-3" id="suggestions-block">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-mono block">Action Recommendations</span>
-                
-                <div className="space-y-2 text-xs" id="suggestions-list-items">
-                  <div className="p-3 bg-gray-50 rounded-lg flex gap-2 items-start">
-                    <Leaf className="h-4.5 w-4.5 text-primary shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-gray-900 block leading-none">Strengthen Compost Cycle</span>
-                      <p className="text-[10px] text-gray-500 leading-tight">Since you composting kitchen scraps, you significantly divert waste away from Municipal dumps.</p>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-gray-50 rounded-lg flex gap-2 items-start">
-                    <Zap className="h-4.5 w-4.5 text-amber-500 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-gray-900 block leading-none">Optimize Commute Strategy</span>
-                      <p className="text-[10px] text-gray-500 leading-tight">By selecting low-carbon commutes, you keep your weekly carbon footprint under 115 kilograms.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Pre submission state prompt */
-            <div className="text-center py-12 text-gray-400 space-y-3" id="empty-feedback-prompt">
-              <Info className="h-10 w-10 text-gray-200 mx-auto" />
-              <p className="text-xs max-w-xs mx-auto">Fill in the EcoPulse daily answers on the left to review your dynamic carbon weight metrics and conservation strategies.</p>
-            </div>
-          )}
-        </div>
-
+      {/* Centered 30-Second EcoPulse Check-In Widget */}
+      <div className="max-w-2xl mx-auto w-full" id="ecopulse-outer-grid">
+        <QuestionTool
+          questions={ECO_PULSE_QUESTIONS}
+          onSubmitAnswer={handleAnswerSubmitted}
+          isSyncing={isSyncing}
+          onFinalSubmit={() => handlePulseSubmit()}
+          className="w-full"
+        />
       </div>
     </div>
   );

@@ -4,7 +4,32 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
-import { MapPin, Camera, AlertTriangle, HelpCircle, FileText, CheckCircle2, ChevronRight, Loader2, RefreshCw, Upload } from "lucide-react";
+import {
+  MapPin,
+  Camera,
+  AlertTriangle,
+  HelpCircle,
+  FileText,
+  CheckCircle2,
+  ChevronRight,
+  Loader2,
+  RefreshCw,
+  Upload,
+  Globe,
+  Flame,
+  User,
+  Shield,
+  Layers,
+  Sparkles,
+  Search,
+  X,
+  Play,
+  Clock,
+  Link,
+  ChevronDown,
+  ArrowDownNarrowWide,
+  FolderOpen
+} from "lucide-react";
 import { CameroonRegion } from "../types";
 
 // Static local context data matching our Cameroon administrative schema
@@ -78,32 +103,12 @@ const NEIGHBORHOOD_MAPPING: Record<string, string[]> = {
   "Kribi I": ["Mboa Manga", "Kribi Beach Area"]
 };
 
-// Preset reference photos representing real Cameroon environmental situations to facilitate direct testing
+// Preset reference photos representing real Cameroon environmental situations
 const PRESET_PHOTOS = [
   {
-    title: "Urban Drain Blockage",
-    url: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80",
-    description: "Plastic sludge blocks an open storm drainage outlet adjacent to Yaoundé local marketplace secondary road."
-  },
-  {
-    title: "Water Contamination Well",
-    url: "https://images.unsplash.com/photo-1504198453319-5ce911bafcde?auto=format&fit=crop&w=600&q=80",
-    description: "Industrial fluid spill coloring drainage pathways close to drinking water borehole taps in Bonaberi."
-  },
-  {
-    title: "Open Refuse Burning",
-    url: "https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?auto=format&fit=crop&w=600&q=80",
-    description: "Smoke clouds rise from open garbage burning near schools and residential compounds of Biyem-Assi."
-  },
-  {
-    title: "Plastics River Silt",
-    url: "https://images.unsplash.com/photo-1618477388954-7852f32655ec?auto=format&fit=crop&w=600&q=80",
-    description: "Polystyrene packaging and polyethylene bottles accumulated downstream in urban riverways."
-  },
-  {
-    title: "Eco Erosion Soil Loss",
-    url: "https://images.unsplash.com/photo-1500485035595-cbe6f645feb1?auto=format&fit=crop&w=600&q=80",
-    description: "Severe tropical downpour erosion lines and loose soil siltation choking secondary gutters."
+    title: "Cameroon Dumpsite Accumulation",
+    url: "https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=600&q=80",
+    description: "Uncontrolled refuse dumpsite overflowing with loose plastic waste, nylon materials, and generic domestic litter in Cameroon capital districts."
   }
 ];
 
@@ -113,6 +118,10 @@ interface ContributeTabProps {
 }
 
 export default function ContributeTab({ onObservationAdded, catalogsCount }: ContributeTabProps) {
+  // Navigation / Tab states
+  const [activeTab, setActiveTab] = useState<"upload" | "presets" | "url">("upload");
+
+  // Input states
   const [region, setRegion] = useState<CameroonRegion>("Centre");
   const [city, setCity] = useState("Yaoundé");
   const [town, setTown] = useState("Yaoundé VI");
@@ -121,7 +130,11 @@ export default function ContributeTab({ onObservationAdded, catalogsCount }: Con
   const [description, setDescription] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
   const [imageName, setImageName] = useState("");
+  const [urlInput, setUrlInput] = useState("");
   const [pollutionTag, setPollutionTag] = useState<"Clean" | "Slightly Polluted" | "Moderately Polluted" | "Highly Polluted" | "Extremely Polluted">("Moderately Polluted");
+  const [impactArea, setImpactArea] = useState<string>("Local Ward (Radius < 250m)");
+
+  // UI state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [successResponse, setSuccessResponse] = useState<any>(null);
@@ -175,7 +188,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount }: Con
       reader.onloadend = () => {
         setPhotoUrl(reader.result as string);
         
-        // Simulate immediate fronted loading effect for AI processing
+        // Simulate immediate frontend loading effect for AI processing
         setTimeout(() => {
           setStatusMessage("Contacting GreenLens AI server...");
           setTimeout(() => {
@@ -185,6 +198,14 @@ export default function ContributeTab({ onObservationAdded, catalogsCount }: Con
         }, 1000);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  // Direct custom URL input submission helper
+  const handleApplyUrl = () => {
+    if (urlInput.trim()) {
+      setPhotoUrl(urlInput.trim());
+      setImageName("imported_external_evidence.png");
     }
   };
 
@@ -230,7 +251,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount }: Con
           townOrArrondissement: town,
           neighborhood: neighborhood || town,
           description,
-          photoUrl,
+          photoUrl: photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80",
           reporterName: "Awah Blaise Atanga",
           pollutionTag
         })
@@ -262,327 +283,416 @@ export default function ContributeTab({ onObservationAdded, catalogsCount }: Con
     setDescription("");
     setPhotoUrl("");
     setImageName("");
+    setUrlInput("");
     setPollutionTag("Moderately Polluted");
+    setImpactArea("Local Ward (Radius < 250m)");
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8" id="contribute-tab-view">
-      {/* Title Header */}
-      <div className="text-center space-y-2 pt-4" id="contribute-header">
-        <h2 className="text-2xl font-black text-primary tracking-tight md:text-3xl">New Observation Setup</h2>
-        <p className="text-gray-500 text-xs md:text-sm">
-          Report ecological hotspots and feed metadata into our community environmental intelligence registry.
-        </p>
-      </div>
-
-      {successResponse ? (
-        /* Success Screen */
-        <div className="bg-white rounded-xl border border-emerald-200 shadow-sm p-8 text-center space-y-6" id="success-screen">
-          <div className="h-16 w-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto" id="success-ring">
-            <CheckCircle2 className="h-10 w-10 animate-bounce" />
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-xl font-bold text-gray-900">Observation Registered Successfully!</h3>
-            <p className="text-xs text-gray-500 max-w-md mx-auto">
-              Your report has been successfully evaluated by GreenLens AI. The catalog for <span className="font-semibold text-primary">{successResponse.catalog?.neighborhood || neighborhood}</span> has been updated with an enhanced environmental score.
-            </p>
-          </div>
-
-          <div className="bg-emerald-50/50 rounded-lg p-4 max-w-md mx-auto border border-emerald-100/50 space-y-2 text-left text-xs font-medium" id="xp-reward-card">
-            <span className="text-emerald-800 font-bold uppercase tracking-wider block font-mono text-[9px]">Contribution Impact Reward</span>
-            <div className="flex justify-between text-gray-600">
-              <span>Points Earned</span>
-              <span className="font-bold text-emerald-700 font-mono">+30 XP</span>
+    <div className="flex items-center justify-center p-2 max-w-2xl mx-auto" id="contribute-tab-view">
+      <div className="w-full max-h-[92vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] rounded-3xl shadow-xl border border-gray-150 bg-white p-5 sm:p-7 space-y-6">
+        
+        {successResponse ? (
+          /* Success screen with beautiful feedback card */
+          <div className="bg-white text-center py-6 space-y-6 animate-scaleIn" id="success-screen">
+            <div className="h-16 w-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-sm" id="success-ring">
+              <CheckCircle2 className="h-9 w-9 animate-bounce" />
             </div>
-            <div className="flex justify-between text-gray-600">
-              <span>Current User Rank</span>
-              <span className="font-bold text-emerald-800 font-mono">{successResponse.userStats?.level}</span>
-            </div>
-          </div>
-
-          <div className="flex gap-3 justify-center pt-3">
-            <button
-              onClick={startNewReport}
-              className="bg-primary hover:bg-primary-light text-white text-xs font-semibold px-6 py-3 rounded-lg flex items-center gap-1.5 transition-all"
-            >
-              <RefreshCw className="h-4 w-4" /> Start Another Report
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* Contribution Form Form */
-        <form onSubmit={handleSubmit} className="space-y-6" id="contribution-form">
-          
-          {/* Section 1: Administrative Location Hierarchy */}
-          <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-xs space-y-4" id="location-context-card">
-            <div className="flex items-center gap-2 border-b border-gray-100 pb-3" id="loc-header">
-              <MapPin className="h-5 w-5 text-primary" />
-              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-700 font-mono">1. Local Location Context</h3>
+            
+            <div className="space-y-2">
+              <h3 className="text-lg font-extrabold text-gray-950">Observation Filed Successfully!</h3>
+              <p className="text-xs text-gray-500 max-w-md mx-auto leading-relaxed">
+                Your report from <span className="font-bold text-primary">{neighborhood}, {city}</span> has been compiled and is active. The community threat rating indexes have been automatically reweighted.
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in duration-300" id="location-selects-grid">
-              {/* Region */}
-              <div className="space-y-1">
-                <label className="text-xs font-extrabold text-gray-500 uppercase tracking-wider font-mono">Region</label>
-                <select
-                  value={region}
-                  onChange={(e) => setRegion(e.target.value as CameroonRegion)}
-                  className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs font-semibold text-gray-800 focus:border-primary focus:outline-0 transition-all cursor-pointer shadow-3xs"
-                  id="select-region"
+            <div className="bg-emerald-50/70 p-4 rounded-2xl max-w-sm mx-auto border border-emerald-100/60 text-left text-xs font-semibold space-y-2.5" id="xp-reward-card">
+              <div className="flex items-center justify-between border-b border-emerald-100/50 pb-1.5">
+                <span className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider block font-mono">Engagement Reward</span>
+                <span className="bg-emerald-600 text-white rounded text-[9px] px-1.5 py-0.5 uppercase tracking-tight">Status: Sync Safe</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>Direct Intelligence Contribution</span>
+                <span className="font-extrabold text-emerald-700 font-mono">+30 XP Given</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>Revised User Level</span>
+                <span className="font-extrabold text-emerald-800 font-mono">{successResponse.userStats?.level || "Capitaine Eco"}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-center pt-2">
+              <button
+                onClick={startNewReport}
+                className="bg-primary hover:bg-primary-light text-white text-xs font-extrabold px-6 py-3 rounded-xl flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+              >
+                <RefreshCw className="h-4 w-4" /> Start New Audit
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Active Interactive Audit Submission Form */
+          <form onSubmit={handleSubmit} className="space-y-6 text-left">
+            
+            {/* Form Header block */}
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 bg-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm">
+                <Camera className="w-5.5 h-5.5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base sm:text-lg font-black text-gray-950 tracking-tight leading-snug">
+                  Create Environmental Registry
+                </h2>
+                <p className="text-gray-500 text-xs sm:text-[13px] leading-relaxed font-medium">
+                  Drop a photo or select administrative locations to map ecological hotspots instantly across Cameroon capital districts.
+                </p>
+              </div>
+            </div>
+
+            {/* Custom Tab Switcher for Evidence Attachment style */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-extrabold uppercase tracking-widest text-gray-400 font-mono block">
+                1. Select Environmental Evidence Option
+              </span>
+              <div className="grid w-full grid-cols-3 rounded-xl p-1 bg-gray-100 border border-gray-150">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("upload")}
+                  className={`rounded-lg py-1.5 font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                    activeTab === "upload"
+                      ? "bg-white text-primary shadow-sm"
+                      : "text-gray-500 hover:text-gray-800"
+                  }`}
                 >
-                  {REGION_OPTIONS.map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Upload</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("presets")}
+                  className={`rounded-lg py-1.5 font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                    activeTab === "presets"
+                      ? "bg-white text-primary shadow-sm"
+                      : "text-gray-500 hover:text-gray-800"
+                  }`}
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span>Presets</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("url")}
+                  className={`rounded-lg py-1.5 font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                    activeTab === "url"
+                      ? "bg-white text-primary shadow-sm"
+                      : "text-gray-500 hover:text-gray-800"
+                  }`}
+                >
+                  <Link className="w-3.5 h-3.5" />
+                  <span>URL</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Tab Outputs */}
+            <div className="mt-2 text-center" id="tab-evidence-content">
+              {activeTab === "upload" && (
+                <div
+                  onClick={triggerFileSelector}
+                  className="border-2 border-dashed border-gray-200 rounded-xl p-6 hover:border-primary hover:bg-emerald-50/20 cursor-pointer transition-all bg-gray-50/50"
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImageUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  {photoUrl && activeTab === "upload" ? (
+                    <div className="space-y-3">
+                      <img src={photoUrl} alt="Visual submission preview" className="h-20 w-32 mx-auto object-cover rounded-lg border border-gray-200" referrerPolicy="no-referrer" />
+                      <div className="text-[11px] text-gray-500 font-mono">{imageName || "custom_image.png"}</div>
+                      <span className="text-[11px] text-primary font-bold hover:underline">Change local file</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="w-10 h-10 bg-gray-200 dark:bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <Upload className="w-5 h-5 text-gray-600" />
+                      </div>
+                      <h3 className="text-xs font-bold text-gray-800 mb-1">Upload Environmental Image</h3>
+                      <p className="text-[10px] text-gray-500">Supports JPG, PNG formats up to 10MB sizes</p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "presets" && (
+                <div className="space-y-3">
+                  <div className="flex justify-center">
+                    {PRESET_PHOTOS.map((preset) => {
+                      const isSelected = imageName === preset.title;
+                      return (
+                        <div
+                          key={preset.title}
+                          onClick={() => selectPresetPhoto(preset)}
+                          className={`group relative w-full max-w-sm h-36 bg-gray-150 rounded-xl overflow-hidden border cursor-pointer transition-all ${
+                            isSelected ? "border-primary ring-2 ring-emerald-50" : "border-gray-200 hover:border-gray-400"
+                          }`}
+                        >
+                          <img src={preset.url} alt={preset.title} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                          <div className="absolute inset-x-0 bottom-0 bg-black/70 py-1.5 px-3 text-left">
+                            <span className="text-[10px] font-bold text-white uppercase tracking-wider block leading-none mb-1">{preset.title}</span>
+                            <span className="text-[9px] text-gray-300 line-clamp-1 block leading-none">Click to select as reference case</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {imageName && (
+                    <p className="text-[10px] text-emerald-800 font-semibold text-left bg-emerald-50/50 p-2 rounded-xl mt-1.5">
+                      Selected: <b>{imageName}</b>. {description || "We automatically linked the reference context."}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "url" && (
+                <div className="space-y-3 p-1">
+                  <div className="relative">
+                    <input
+                      type="url"
+                      placeholder="https://example.com/pollution-photo.jpg"
+                      value={urlInput}
+                      onChange={(e) => setUrlInput(e.target.value)}
+                      className="w-full h-11 bg-white border border-gray-200 rounded-xl px-3 pr-16 text-xs text-gray-800 font-medium focus:border-primary-light outline-none transition-all shadow-3xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyUrl}
+                      className="absolute right-1.5 top-1.5 bg-primary text-white font-bold text-[10px] px-3 h-8 rounded-lg uppercase tracking-tight flex items-center justify-center hover:bg-primary-light"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {photoUrl && activeTab === "url" && (
+                    <div className="p-3 rounded-xl border border-emerald-100 bg-emerald-50/40 text-left flex items-center gap-3">
+                      <Globe className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[11px] font-bold text-gray-900 block leading-tight">Image URL Linked</span>
+                        <span className="text-[10px] text-gray-500 truncate block">{photoUrl}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Form Fields: Grid Configurations */}
+            <div className="space-y-4">
+              
+              {/* Pollution Gravity Level */}
+              <div>
+                <label className="block text-xs font-black uppercase tracking-widest text-[#00600f] font-mono mb-2">
+                  Threat Level (Pollution Tag Scale)
+                </label>
+                <div className="relative">
+                  <select
+                    value={pollutionTag}
+                    onChange={(e) => setPollutionTag(e.target.value as any)}
+                    className="w-full bg-white border border-gray-200 rounded-xl h-11 px-3 text-xs font-bold text-gray-800 outline-none focus:border-primary cursor-pointer appearance-none shadow-3xs"
+                  >
+                    <option value="Clean">Clean (0 - pristine state)</option>
+                    <option value="Slightly Polluted">Slightly Polluted (25 - scattered garbage bags)</option>
+                    <option value="Moderately Polluted">Moderately Polluted (50 - standard refuse piles & drainage issues)</option>
+                    <option value="Highly Polluted">Highly Polluted (75 - major structural waste accumulation)</option>
+                    <option value="Extremely Polluted">Extremely Polluted (100 - critical environmental block hazard)</option>
+                  </select>
+                  <ChevronDown className="absolute right-3.5 top-3.5 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
               </div>
 
-              {/* City */}
-              <div className="space-y-1">
-                <label className="text-xs font-extrabold text-gray-500 uppercase tracking-wider font-mono">City / Commune</label>
-                <div className="relative">
+              {/* Geographical Hierarchy Grid (2 columns on mobile/tablet) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Region */}
+                <div>
+                  <label className="block text-xs font-black uppercase tracking-widest text-gray-400 font-mono mb-2">
+                    Region
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={region}
+                      onChange={(e) => setRegion(e.target.value as CameroonRegion)}
+                      className="w-full bg-white border border-gray-200 rounded-xl h-11 px-3 text-xs font-bold text-gray-800 outline-none focus:border-primary cursor-pointer appearance-none shadow-3xs"
+                    >
+                      {REGION_OPTIONS.map((r) => (
+                        <option key={r} value={r}>
+                          {r} Region
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3.5 top-3.5 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                {/* City */}
+                <div>
+                  <label className="block text-xs font-black uppercase tracking-widest text-gray-400 font-mono mb-2">
+                    City / Commune
+                  </label>
                   <input
                     type="text"
                     value={city}
                     onChange={(e) => handleCityChange(e.target.value)}
-                    placeholder="e.g. Douala, Bamenda, Kumba, Yaoundé"
-                    className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs font-semibold text-gray-800 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-0 transition-all font-sans"
-                    id="input-city"
+                    placeholder="e.g. Yaoundé, Douala"
+                    className="w-full h-11 bg-white border border-gray-200 rounded-xl px-3 text-xs font-bold text-gray-800 outline-none focus:border-primary shadow-3xs"
                     required
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 font-sans mt-0.5">Type freely to enter any city or commune in Cameroon</p>
+
               </div>
 
-              {/* Town */}
-              <div className="space-y-1">
-                <label className="text-xs font-extrabold text-gray-500 uppercase tracking-wider font-mono">Town / Arrondissement</label>
-                <div className="relative">
+              {/* Sub-division & Neighborhood Town fields */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Town/Arrondissement */}
+                <div>
+                  <label className="block text-xs font-black uppercase tracking-widest text-gray-400 font-mono mb-2">
+                    Arrondissement / Subdivision
+                  </label>
                   <input
                     type="text"
                     value={town}
                     onChange={(e) => handleTownChange(e.target.value)}
-                    placeholder="e.g. Douala IV, Kumba I, Bamenda II, Yaoundé VI"
-                    className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs font-semibold text-gray-800 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-0 transition-all font-sans"
-                    id="input-town"
+                    placeholder="e.g. Yaoundé VI, Buea I"
+                    className="w-full h-11 bg-white border border-gray-200 rounded-xl px-3 text-xs font-bold text-gray-800 outline-none focus:border-primary shadow-3xs"
                     required
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 font-sans mt-0.5">Type your sub-division, commune, or local government zone</p>
-              </div>
 
-              {/* Neighborhood */}
-              <div className="space-y-1">
-                <label className="text-xs font-extrabold text-gray-500 uppercase tracking-wider font-mono">Neighborhood / Village</label>
-                <div className="relative">
+                {/* Neighborhood or Street */}
+                <div>
+                  <label className="block text-xs font-black uppercase tracking-widest text-gray-400 font-mono mb-2">
+                    Neighborhood / Quarter
+                  </label>
                   <input
                     type="text"
                     value={neighborhood}
                     onChange={(e) => setNeighborhood(e.target.value)}
-                    placeholder="e.g. Bastos, Akwa, Molyko, Melen"
-                    className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs font-semibold text-gray-800 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-0 transition-all font-sans"
-                    id="input-neighborhood"
+                    placeholder="e.g. Melen, Bastos, Akwa"
+                    className="w-full h-11 bg-white border border-gray-200 rounded-xl px-3 text-xs font-bold text-gray-800 outline-none focus:border-primary shadow-3xs"
                     required
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 font-sans mt-0.5">Type your exact quarter, neighborhood, village name, or street</p>
+
               </div>
-            </div>
 
-            <div className="bg-emerald-50/70 p-4 rounded-lg flex items-center justify-between border border-emerald-100" id="catalog-join-checker">
-              <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 bg-primary text-white rounded-lg flex items-center justify-center font-mono text-xs font-bold leading-none shrink-0">
-                  ID
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-gray-900 block leading-tight">Catalogs Resolved</span>
-                  <span className="text-[10px] font-mono font-medium text-gray-400">
-                    DATA: LOC_{[town, neighborhood].filter(Boolean).map(x => x.substring(0,3).toUpperCase()).join("_")}_{(city || "YAO").substring(0,3).toUpperCase()}_CMR
-                  </span>
-                </div>
-              </div>
-              <span className="text-[10px] uppercase font-bold tracking-widest text-[#0c5216] px-2 py-1 bg-[#acf4a4] rounded">
-                Auto-Link
-              </span>
-            </div>
-          </div>
-
-          {/* Section 2: Visual Evidence Upload */}
-          <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-xs space-y-4" id="visual-evidence-card">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3" id="vis-header">
-              <div className="flex items-center gap-2">
-                <Camera className="h-5 w-5 text-primary" />
-                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-700 font-mono">2. Upload Ecological Evidence</h3>
-              </div>
-              <span className="text-[10px] font-semibold text-gray-400 font-mono bg-gray-100 px-2.5 py-1 rounded">
-                REQUIRED
-              </span>
-            </div>
-
-            {/* Drag & Drop Visual Box */}
-            <div
-              onClick={triggerFileSelector}
-              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-                photoUrl ? "border-primary bg-emerald-50/20" : "border-gray-200 hover:border-accent hover:bg-gray-50/50"
-              }`}
-              id="upload-evidence-dropzone"
-            >
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleImageUpload}
-                accept="image/*"
-                className="hidden"
-                id="file-element-input"
-              />
-
-              {photoUrl ? (
-                <div className="space-y-3" id="preview-image-block">
-                  <div className="h-32 w-32 mx-auto rounded-lg overflow-hidden border border-gray-200 shadow-xs">
-                    <img src={photoUrl} alt="Visual submission preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                  </div>
-                  <div className="text-xs text-gray-500 font-mono font-medium">
-                    {imageName || "custom_image_submission.png"}
-                  </div>
-                  <span className="text-xs text-primary font-bold hover:underline inline-block">
-                    Change visual evidence
-                  </span>
-                </div>
-              ) : (
-                <div className="space-y-3" id="drag-drop-placeholder">
-                  <Upload className="h-10 w-10 text-gray-400 mx-auto" />
-                  <div>
-                    <span className="text-sm font-bold text-gray-800 block">Tap to capture or upload evidence</span>
-                    <span className="text-xs text-gray-400 block mt-1">High-resolution photo or secondary video clip</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Alternate Regional Reference Presets for Testing Convenience */}
-            <div className="space-y-2 pt-1" id="presets-selector-wrapper">
-              <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest font-mono block">
-                OR Select Regional Testing Reference Preset:
-              </span>
-              <div className="grid grid-cols-3 gap-2" id="preset-cards">
-                {PRESET_PHOTOS.map((preset) => (
-                  <div
-                    key={preset.title}
-                    onClick={() => selectPresetPhoto(preset)}
-                    className="group relative h-20 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 hover:border-accent cursor-pointer transition-all"
-                  >
-                    <img src={preset.url} alt={preset.title} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                    <div className="absolute inset-x-0 bottom-0 bg-black/75 px-1.5 py-1 text-center">
-                      <span className="text-[9px] font-bold text-white truncate block">{preset.title}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Section 3: AI Analysis Card + Additional Context */}
-          <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-xs space-y-4" id="description-card">
-            <div className="flex items-center gap-2 border-b border-gray-100 pb-3" id="desc-header">
-              <FileText className="h-5 w-5 text-primary" />
-              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-700 font-mono">3. Additional Ecological Context</h3>
-            </div>
-
-            <div className="space-y-4" id="text-fields-wrapper">
-              {/* Deterministic Scoring Engine Key Field */}
-              <div className="space-y-1">
-                <label className="text-xs font-extrabold text-[#0c5216] uppercase tracking-wider font-mono block">
-                  How Dirty is this Area? (Pollution Tag)
+              {/* Impact Area Scaling */}
+              <div>
+                <label className="block text-xs font-black uppercase tracking-widest text-gray-400 font-mono mb-2">
+                  Impact Radius Scale
                 </label>
-                <select
-                  value={pollutionTag}
-                  onChange={(e) => setPollutionTag(e.target.value as any)}
-                  className="w-full bg-white border-2 border-[#125d1e]/20 rounded-lg p-2.5 text-xs font-bold text-gray-800 focus:border-primary focus:outline-0 transition-all cursor-pointer shadow-3xs"
-                  id="select-pollution-tag"
-                >
-                  <option value="Clean">Clean (0 - pristine condition)</option>
-                  <option value="Slightly Polluted">Slightly Polluted (25 - low-level litter)</option>
-                  <option value="Moderately Polluted">Moderately Polluted (50 - standard refuse pile & clogs)</option>
-                  <option value="Highly Polluted">Highly Polluted (75 - heavy structural pollution)</option>
-                  <option value="Extremely Polluted">Extremely Polluted (100 - extreme toxic / caked hazard)</option>
-                </select>
-                <p className="text-[10px] text-gray-400 mt-1">
-                  Your manual selection calculates a deterministic weighted score locally when at least 5 images exist.
-                </p>
+                <div className="relative">
+                  <select
+                    value={impactArea}
+                    onChange={(e) => setImpactArea(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl h-11 px-3 text-xs font-bold text-gray-800 outline-none focus:border-primary cursor-pointer appearance-none shadow-3xs"
+                  >
+                    <option value="Local Ward (Radius < 250m)">Local Ward (Radius &lt; 250m)</option>
+                    <option value="River Basin Stream">River Basin Stream / Catchment</option>
+                    <option value="Sub-division Zone">Full Arrondissement / Commune Block</option>
+                    <option value="Metropolitan Core">Major Transit Arteries (Yaoundé / Douala)</option>
+                  </select>
+                  <ChevronDown className="absolute right-3.5 top-3.5 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-extrabold text-gray-500 uppercase tracking-wider font-mono block">
-                  Write detailed observations...
+              {/* Detailed observation logs text boxes */}
+              <div>
+                <label className="block text-xs font-black uppercase tracking-widest text-gray-400 font-mono mb-2">
+                  Detailed Observations & Threat Factors
                 </label>
                 <textarea
-                  rows={4}
+                  rows={3}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe the severity, location indicators, approximate waste pile volumes, odor presence, or municipal dumping triggers alongside schools or water canals in Cameroon..."
-                  className="w-full bg-white border border-gray-200 rounded-lg p-3 text-xs text-gray-800 focus:border-primary focus:outline-0 transition-all font-medium"
-                  id="observation-textarea"
+                  placeholder="Describe waste volumes, odor emission levels, proximity to schools or streams, or community risks..."
+                  className="w-full bg-white border border-gray-200 rounded-xl p-3 text-xs text-gray-800 font-medium outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all shadow-3xs"
+                  required
                 />
               </div>
 
-              {/* Live Automated Preliminary Findings (AI Visual Indicator Block) */}
-              <div className="bg-amber-50/50 rounded-xl p-4 border border-amber-100 space-y-3" id="preliminary-ai-box">
-                <div className="flex items-center gap-2" id="ai-box-title">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 animate-pulse" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-amber-800 font-mono block">
-                    Automated Preliminary Findings (AI Engine)
+              {/* Unified Link Resolution Card */}
+              <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-7 w-7 bg-[#125d1e]/10 text-primary rounded-lg flex items-center justify-center font-mono text-[10px] font-bold shrink-0">
+                    ID
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-gray-900 block leading-tight">Catalog Router Code</span>
+                    <span className="text-[9px] font-mono font-bold text-gray-400">
+                      LOC_{[town, neighborhood].filter(Boolean).map(x => x.substring(0,3).toUpperCase()).join("_")}_{(city || "YAO").substring(0,3).toUpperCase()}_CMR
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[9px] uppercase font-bold tracking-widest text-emerald-800 px-2 py-0.5 bg-emerald-100 rounded">
+                  Resolved ID
+                </span>
+              </div>
+
+              {/* Interactive AI preliminary detection log */}
+              <div className="bg-amber-50/50 rounded-xl p-3.5 md:p-4 border border-amber-100 space-y-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4.5 w-4.5 text-amber-600 animate-pulse shrink-0" />
+                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-amber-800 font-mono">
+                    GreenLens Automated Preliminary Extraction (AI)
                   </span>
                 </div>
-
-                <div className="space-y-2 text-xs font-medium" id="preliminary-findings-list">
-                  <div className="flex gap-2">
-                    <span className="text-amber-600 font-bold">•</span>
-                    <p className="text-gray-600">
-                      Detection: <span className="text-gray-800 font-bold">Waiting for details...</span> Write and supply visual evidence to let server-side AI extract catalog weights.
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-amber-600 font-bold">•</span>
-                    <p className="text-gray-600">
-                      Waterway proximity evaluation: <span className="text-gray-800 font-bold">Unconfirmed.</span>
-                    </p>
-                  </div>
+                <div className="space-y-1.5 text-xs font-semibold leading-relaxed text-gray-600">
+                  <p>
+                    • Detection status: <span className="text-gray-800">{photoUrl ? "Visual bytes mapped" : "Waiting for visual input"}</span>
+                  </p>
+                  <p>
+                    • Community threat index bias: <span className="text-gray-800">{pollutionTag} (+{pollutionTag === "Clean" ? "0" : pollutionTag === "Slightly Polluted" ? "15" : "30"} on local index)</span>
+                  </p>
                 </div>
               </div>
+
             </div>
-          </div>
 
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row items-center gap-3 justify-between" id="contribute-cta-grid">
-            <button
-              type="button"
-              onClick={startNewReport}
-              className="text-gray-500 hover:text-gray-700 text-xs font-mono font-extrabold underline order-2 sm:order-1"
-            >
-              Reset Draft Fields
-            </button>
-            
-            <button
-              type="submit"
-              disabled={isAnalyzing || !description.trim()}
-              className="w-full sm:w-auto bg-primary hover:bg-primary-light disabled:bg-gray-200 text-white font-semibold text-xs py-3.5 px-8 rounded-lg flex items-center justify-center gap-2 tracking-wider uppercase transition-all order-1 sm:order-2"
-              id="submit-observation-btn"
-            >
-              {isAnalyzing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin text-white" />
-                  <span>{statusMessage || "Syncing AI insights..."}</span>
-                </>
-              ) : (
-                <>
-                  <span>Submit to Environmental Catalog</span>
-                  <ChevronRight className="h-4 w-4" />
-                </>
-              )}
-            </button>
-          </div>
+            {/* Footer Form Submission Block */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-gray-150">
+              <button
+                type="button"
+                onClick={startNewReport}
+                className="text-gray-400 hover:text-gray-650 transition-all text-xs font-bold underline font-mono flex items-center gap-1.5 cursor-pointer order-2 sm:order-1"
+              >
+                Clear Draft Fields
+              </button>
+              
+              <button
+                type="submit"
+                disabled={isAnalyzing || !description.trim()}
+                className="w-full sm:w-auto bg-gray-950 hover:bg-gray-850 active:scale-97 disabled:bg-gray-200 text-white rounded-xl px-8 py-3 font-semibold text-xs transition-all uppercase tracking-wider flex items-center justify-center gap-2 order-1 sm:order-2 cursor-pointer shadow-sm"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-white" />
+                    <span>{statusMessage || "Parsing indicators..."}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Submit to Environmental Catalog</span>
+                    <ChevronRight className="w-4 h-4 text-emerald-300" />
+                  </>
+                )}
+              </button>
+            </div>
 
-        </form>
-      )}
+          </form>
+        )}
+        
+      </div>
     </div>
   );
 }
