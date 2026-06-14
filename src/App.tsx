@@ -27,7 +27,11 @@ export default function App() {
   const [catalogs, setCatalogs] = useState<EnvironmentalCatalog[]>(() => {
     try {
       const cached = localStorage.getItem("greenlens_catalogs");
-      return cached ? JSON.parse(cached) : SEED_CATALOGS;
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        return Array.isArray(parsed) && parsed.length > 0 ? parsed : SEED_CATALOGS;
+      }
+      return SEED_CATALOGS;
     } catch {
       return SEED_CATALOGS;
     }
@@ -36,7 +40,11 @@ export default function App() {
   const [organizations, setOrganizations] = useState<Organization[]>(() => {
     try {
       const cached = localStorage.getItem("greenlens_organizations");
-      return cached ? JSON.parse(cached) : SEED_ORGANIZATIONS;
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        return Array.isArray(parsed) && parsed.length > 0 ? parsed : SEED_ORGANIZATIONS;
+      }
+      return SEED_ORGANIZATIONS;
     } catch {
       return SEED_ORGANIZATIONS;
     }
