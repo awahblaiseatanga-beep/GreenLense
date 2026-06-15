@@ -16,6 +16,7 @@ import CatalogDetailModal from "./components/CatalogDetailModal";
 import WelcomePage from "./components/WelcomePage";
 import DynamicIsland from "./components/DynamicIsland";
 import { SEED_CATALOGS, SEED_ORGANIZATIONS, SEED_USER_STATS } from "./data/seedData";
+import greenlensLogo from "./assets/images/greenlens_logo_1781522444785.jpg";
 
 type TabId = "explore" | "contribute" | "impact" | "insights" | "profile";
 
@@ -195,8 +196,13 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex items-center justify-between" id="header-container">
           
           <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveTab("explore")} id="logo-block">
-            <div className="h-9 w-9 bg-primary text-white rounded-xl shadow-xs flex items-center justify-center font-black text-sm tracking-wider leading-none">
-              GL
+            <div className="h-10 w-10 bg-white rounded-xl shadow-xs border border-gray-150 p-0.5 overflow-hidden flex items-center justify-center shrink-0">
+              <img 
+                src={greenlensLogo} 
+                alt="GreenLens Cameroon Logo" 
+                className="w-full h-full object-contain rounded-lg" 
+                referrerPolicy="no-referrer"
+              />
             </div>
             <div>
               <h1 className="text-base font-black tracking-wider text-primary leading-none font-sans flex items-center gap-1">
@@ -265,6 +271,7 @@ export default function App() {
                   }
                   setActiveTab("insights");
                 }}
+                onNavigateToImpact={() => setActiveTab("impact")}
               />
             )}
             {activeTab === "contribute" && (

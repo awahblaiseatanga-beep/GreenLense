@@ -2,18 +2,30 @@ import { createClient } from "@supabase/supabase-js";
 
 let supabaseInstance: any = null;
 
+function sanitizeSupabaseUrl(url?: string): string {
+  if (!url) return "";
+  let clean = url.trim();
+  clean = clean.replace(/\/+$/, "");
+  clean = clean.replace(/\/(rest|auth)\/v1\/?$/, "");
+  if (clean && !clean.startsWith("http://") && !clean.startsWith("https://")) {
+    clean = "https://" + clean;
+  }
+  return clean;
+}
+
 /**
  * Lazy Initializer for the Supabase Client.
  * Runs on-demand and degrades gracefully if environment credentials are not present.
  */
 export function getSupabase(): any {
   if (!supabaseInstance) {
-    const url = process.env.SUPABASE_URL;
+    const rawUrl = process.env.SUPABASE_URL;
+    const url = sanitizeSupabaseUrl(rawUrl);
     // Prefer service role key on the server to bypass RLS for administrative synchronization,
     // fallback to anon key if preferred by the infrastructure.
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+    const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
 
-    if (url && key) {
+    if (url && key && url.includes(".")) {
       try {
         supabaseInstance = createClient(url, key, {
           auth: {
@@ -21,7 +33,7 @@ export function getSupabase(): any {
             autoRefreshToken: false,
           },
         });
-        console.log("⚡ GreenLens Database: Live Supabase Backend activated successfully.");
+        console.log("⚡ GreenLens Database: Live Supabase Backend activated successfully on sanitized URL:", url);
       } catch (err) {
         console.warn("❌ Failed to initiate Supabase database connection:", err);
       }

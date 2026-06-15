@@ -13,9 +13,10 @@ interface ExploreTabProps {
   catalogs: EnvironmentalCatalog[];
   onSelectCatalog: (catalog: EnvironmentalCatalog) => void;
   onNavigateToInsights?: (anchorId?: string) => void;
+  onNavigateToImpact?: () => void;
 }
 
-export default function ExploreTab({ catalogs, onSelectCatalog, onNavigateToInsights }: ExploreTabProps) {
+export default function ExploreTab({ catalogs, onSelectCatalog, onNavigateToInsights, onNavigateToImpact }: ExploreTabProps) {
   const [selectedRegion, setSelectedRegion] = useState<CameroonRegion | "All">("All");
 
   // Calculations for Environmental Health Index & Hotspots
@@ -258,21 +259,21 @@ export default function ExploreTab({ catalogs, onSelectCatalog, onNavigateToInsi
             onSelectCatalog={onSelectCatalog}
           />
 
-          {/* Navigation Button to Insights Section */}
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm text-center space-y-4" id="navigate-to-insights-panel">
+          {/* Navigation Button to Impact Section containing feeds */}
+          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm text-center space-y-4" id="navigate-to-impact-feeds-panel">
             <div className="max-w-md mx-auto space-y-2">
-              <h3 className="text-lg font-bold text-gray-950">Looking for Regional Feeds &amp; Catalogs?</h3>
+              <h3 className="text-lg font-bold text-gray-950">Looking for Live Impact Feeds?</h3>
               <p className="text-xs text-gray-500 leading-relaxed">
-                We have migrated catalog intelligence, specific details channels and live community feeds to the interactive Insights Suite.
+                We have migrated catalog intelligence, specific details channels and live community progress feeds directly to the Impact and Audits Suite.
               </p>
             </div>
             <button
               type="button"
-              onClick={() => onNavigateToInsights && onNavigateToInsights("insights-feeds")}
+              onClick={() => onNavigateToImpact ? onNavigateToImpact() : (onNavigateToInsights && onNavigateToInsights("insights-feeds"))}
               className="inline-flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary-light text-white font-extrabold text-xs uppercase tracking-widest rounded-lg transition-all shadow-md group border border-primary-dark cursor-pointer font-mono"
-              id="btn-navigate-insights"
+              id="btn-navigate-impact-feeds"
             >
-              <span>Go to Featured Feeds &amp; Insights</span>
+              <span>Go to Community Feeds &amp; Impact</span>
               <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
             </button>
           </div>

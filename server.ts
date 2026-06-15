@@ -1575,6 +1575,19 @@ async function startServer() {
     res.json(userStats);
   });
 
+  // API 11c: Dyn Supabase configuration loader for browser clients
+  app.get("/api/supabase-config", (req, res) => {
+    const rawUrl = process.env.SUPABASE_URL || "";
+    let cleanUrl = rawUrl.trim().replace(/\/+$/, "").replace(/\/(rest|auth)\/v1\/?$/, "");
+    if (cleanUrl && !cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+      cleanUrl = "https://" + cleanUrl;
+    }
+    res.json({
+      supabaseUrl: cleanUrl,
+      supabaseAnonKey: (process.env.SUPABASE_ANON_KEY || "").trim()
+    });
+  });
+
   // API 11a: Auth Sign Up Register
   app.post("/api/auth/register", async (req, res) => {
     const { email, fullName, password, phone, region, city, townOrArrondissement, neighborhood, role, organizationName } = req.body;
@@ -1677,28 +1690,58 @@ async function startServer() {
     Respond with a simple clean HTML breakdown or Markdown paragraph without mentioning you parsed any JSON. Keep it professional.`;
 
     if (client) {
-      try {
-        const modelRes = await client.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: promptText
-        });
-        if (modelRes.text) {
-          return res.json({ insight: modelRes.text });
+      let attempts = 0;
+      const maxAttempts = 2;
+      while (attempts < maxAttempts) {
+        try {
+          const modelRes = await client.models.generateContent({
+            model: "gemini-3.5-flash",
+            contents: promptText
+          });
+          if (modelRes.text) {
+            return res.json({ insight: modelRes.text });
+          }
+          break;
+        } catch (err: any) {
+          attempts++;
+          const errMsg = err?.message || err;
+          console.warn(`Gemini intelligence insight attempt ${attempts} skipped or timed out:`, errMsg);
+          if (attempts >= maxAttempts) {
+            console.warn("Utilizing high-fidelity local analytical fallback summary generator for client dashboard.");
+          } else {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
         }
-      } catch (err) {
-        console.error("AI Insight generation failed:", err);
       }
     }
 
-    // Default high fidelity generated analysis
-    res.json({
-      insight: `### GreenLens Environmental Intelligence Summary
+    // Generate a beautiful, dynamic, customized fallback report based on real database state:
+    const activeHotspots = analysisCatalogs
+      .filter(c => c.envScore < 60)
+      .map(c => `**${c.neighborhood} (${c.city})**`);
+    
+    const sortedCatalogs = [...analysisCatalogs].sort((a, b) => b.observations.length - a.observations.length);
+    const topActive = sortedCatalogs[0];
+    
+    const hotspotClause = activeHotspots.length > 0 
+      ? `* **Primary Hotspots Detected:** ${activeHotspots.slice(0, 3).join(", ")} are marked as **High Concern** due to low environmental sanity scores and active sanitation reports.`
+      : `* **Primary Hotspots Detected:** All major zones present stable environmental indicators, though continued civic watch remains active in Douala Basin.`;
+      
+    const activityClause = topActive 
+      ? `* **Highest Reporting Activity:** **${topActive.neighborhood} (${topActive.city})** has registered ${topActive.observations.length} active environmental logs, showing strong community vigilante reporting.`
+      : `* **Highest Reporting Activity:** Clean-up campaign trackers are active across key districts of Yaoundé and Douala cities.`;
 
-* **Primary Hotspots Detected:** **Bonaberi (Douala)** is marked as **Critical** due to heavy chemical traces and water well contamination near active Wouri River tributaries. **Melen (Yaoundé)** requires immediate attention regarding plastic clog formations within municipal secondary drainage channels.
-* **Geographical Trends:**
-  - **Yaoundé VI Arrondissement:** Drainage clearance drives have successfully driven Melen's Environmental Score from **60 up to 72/100**, verifying that active NGO interventions yield high trust results.
-  - **Douala Basin:** Heavy industrial overflow threatens drinking infrastructure. We recommend installing civic sensory filter traps along critical water exit lines.
-* **Community Restoration Impact:** Registered NGOs have accumulated high marks, showing strong momentum for organized civic weekend cleanups ('Investissement Humain').`
+    const fallbackInsight = `### GreenLens Environmental Intelligence Summary (Offline Fallback Engine)
+
+${hotspotClause}
+${activityClause}
+* **Geographical Recommendations:**
+  - **Yaoundé VI Arrondissement (Melen, etc.):** Drainage channel unclogging remains the single highest priority to mitigate sudden monsoon water flow backups. We advise scheduling local 'Investissement Humain' cleaning weekends.
+  - **Douala Basin (Bonaberi):** Heavy coastal rain overflow risks and informal dumping threaten local waterways. Focus on community awareness campaigns and containerized public waste bins.
+* **NGO Status:** Civic teams are actively tracking and validating improvements. Continue uploading post-cleanup proofs to support your localized Eco Ranger XP ratings.`;
+
+    res.json({
+      insight: fallbackInsight
     });
   });
 

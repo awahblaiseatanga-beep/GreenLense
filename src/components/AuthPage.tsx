@@ -5,7 +5,8 @@
 
 import React, { useState, useEffect } from "react";
 import { UserStats, CameroonRegion } from "../types";
-import { supabase } from "../supabaseClient";
+import { supabase, getSupabaseClient } from "../supabaseClient";
+import greenlensLogo from "../assets/images/greenlens_logo_1781522444785.jpg";
 import { 
   Mail, 
   Lock, 
@@ -88,11 +89,11 @@ export default function AuthPage({ onAuthSuccess, onClose }: AuthPageProps) {
   const [password, setPassword] = useState("");
 
   // Sign Up Extra Fields
-  const [phone, setPhone] = useState("+237 ");
+  const [phone, setPhone] = useState("");
   const [region, setRegion] = useState<CameroonRegion>("Centre");
   const [city, setCity] = useState("Yaoundé");
   const [townOrArrondissement, setTownOrArrondissement] = useState("Yaoundé VI (Melen)");
-  const [neighborhood, setNeighborhood] = useState("Melen");
+  const [neighborhood, setNeighborhood] = useState("");
   const [role, setRole] = useState<any>("Citizen Scientist");
   const [organizationName, setOrganizationName] = useState("");
 
@@ -137,50 +138,88 @@ export default function AuthPage({ onAuthSuccess, onClose }: AuthPageProps) {
     setIsSyncing(true);
 
     try {
-      if (!supabase) {
-        throw new Error("Supabase is not configured yet. Please configure SUPABASE_URL and SUPABASE_ANON_KEY first.");
-      }
-
-      // 1) Authenticate with Supabase Auth
+      // 1) Authenticate with Supabase Auth if it is configured
+      const activeSupabase = await getSupabaseClient();
       let authUser: any = null;
-      if (isSignUp) {
-        // Sign Up: use supabase.auth.signUp({email, password})
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password
-        });
-        if (signUpError) {
-          throw signUpError;
-        }
-        authUser = signUpData.user;
-      } else {
-        // Sign In: use supabase.auth.signInWithPassword({ email, password })
-        let { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
 
-        // Self-healing: if demo credentials are not yet signed up in the user's Supabase instance, register them automatically!
-        if (signInError && (email === "awahblaiseatanga@gmail.com" || email === "demo@example.com")) {
-          console.warn("Demo account not discovered in Supabase project. Performing automatic demo registration...");
-          const { error: autoSignUpError } = await supabase.auth.signUp({
-            email,
-            password
-          });
-          if (!autoSignUpError) {
-            const retryRes = await supabase.auth.signInWithPassword({ email, password });
-            signInData = retryRes.data;
-            signInError = retryRes.error;
+      if (activeSupabase) {
+        if (isSignUp) {
+          // Sign Up: use activeSupabase.auth.signUp({email, password})
+          try {
+            const { data: signUpData, error: signUpError } = await activeSupabase.auth.signUp({
+              email,
+              password
+            });
+            if (signUpError) {
+              const errMsg = (signUpError.message || "").toLowerCase();
+              if (errMsg.includes("rate limit") || errMsg.includes("60 seconds") || errMsg.includes("too many requests") || signUpError.status === 429) {
+                console.warn("Supabase SignUp rate limit hit, bypassing gracefully to local express database sync:", signUpError.message);
+              } else {
+                throw signUpError;
+              }
+            } else {
+              authUser = signUpData.user;
+            }
+          } catch (signUpErr: any) {
+            const errMsg = (signUpErr?.message || "").toLowerCase();
+            if (errMsg.includes("rate limit") || errMsg.includes("60 seconds") || errMsg.includes("too many requests") || signUpErr?.status === 429) {
+              console.warn("Supabase SignUp rate limit exception caught, bypassing gracefully:", signUpErr.message);
+            } else {
+              throw signUpErr;
+            }
+          }
+        } else {
+          // Sign In: use activeSupabase.auth.signInWithPassword({ email, password })
+          try {
+            const { data: signInData, error: signInError } = await activeSupabase.auth.signInWithPassword({
+              email,
+              password
+            });
+
+            if (signInError) {
+              const errorText = (signInError.message || "").toLowerCase();
+              // If user not found or invalid login credentials, redirect them to register first
+              if (errorText.includes("invalid login credentials") || 
+                  errorText.includes("not found") || 
+                  errorText.includes("no user") || 
+                  errorText.includes("email not confirmed")) {
+                setIsSignUp(true);
+                setErrorMsg("We couldn't find an account matching those credentials. We have switched you to the Sign Up form so you can easily create your GreenLens Cameroon profile first!");
+                setIsSyncing(false);
+                return;
+              }
+              
+              if (errorText.includes("rate limit") || errorText.includes("60 seconds") || errorText.includes("too many requests") || signInError.status === 429) {
+                console.warn("Supabase SignIn rate limit hit, bypassing gracefully to local express database login:", signInError.message);
+              } else {
+                throw signInError;
+              }
+            } else {
+              authUser = signInData.user;
+            }
+          } catch (signInErr: any) {
+            const errorText = (signInErr?.message || "").toLowerCase();
+            if (errorText.includes("invalid login credentials") || 
+                errorText.includes("not found") || 
+                errorText.includes("no user") || 
+                errorText.includes("email not confirmed")) {
+              setIsSignUp(true);
+              setErrorMsg("We couldn't find an account matching those credentials. We have switched you to the Sign Up form so you can easily create your GreenLens Cameroon profile first!");
+              setIsSyncing(false);
+              return;
+            }
+            if (errorText.includes("rate limit") || errorText.includes("60 seconds") || errorText.includes("too many requests") || signInErr?.status === 429) {
+              console.warn("Supabase SignIn rate limit reference error caught, bypassing gracefully:", signInErr?.message);
+            } else {
+              throw signInErr;
+            }
           }
         }
-
-        if (signInError) {
-          throw signInError;
-        }
-        authUser = signInData.user;
+      } else {
+        console.info("Supabase is not configured. Proceeding with sandbox local/Express authentication mode.");
       }
 
-      // 2) If Supabase is successful, synchronize user session / stats with Express backend
+      // 2) Synchronize user session / stats with Express backend
       const endpoint = isSignUp ? "/api/auth/register" : "/api/auth/login";
       const payload = isSignUp 
         ? { email, fullName, password, phone, region, city, townOrArrondissement, neighborhood, role, organizationName }
@@ -202,12 +241,26 @@ export default function AuthPage({ onAuthSuccess, onClose }: AuthPageProps) {
             onAuthSuccess(data.userStats);
           }, 1200);
         } else {
-          // Fall back gracefully to offline state using the details we have
+          // Check if user not found in backend database during sign-in
+          if (!isSignUp && (res.status === 404 || (data.error || "").toLowerCase().includes("not found"))) {
+            setIsSignUp(true);
+            setErrorMsg("We couldn't find an account matching those credentials. We have switched you to the Sign Up form so you can easily create your GreenLens Cameroon profile first!");
+            setIsSyncing(false);
+            return;
+          }
           throw new Error(data.error || "Profile synchronization failure.");
         }
-      } catch (syncErr) {
-        console.warn("Express backend sync offline/failed, proceeding with direct Supabase session:", syncErr);
-        setSuccessMsg("Authorized with Supabase! Redirecting to dashboard...");
+      } catch (syncErr: any) {
+        // If it was already caught or redirected, return
+        if (isSignUp) {
+          throw syncErr;
+        }
+
+        console.warn("Express backend sync offline/failed, proceeding with direct session:", syncErr);
+        setSuccessMsg(activeSupabase 
+          ? "Authorized with Supabase! Redirecting to dashboard..." 
+          : "Authorized locally! Loading sandbox terminal..."
+        );
         
         setTimeout(() => {
           const fallbackUser: UserStats = {
@@ -233,18 +286,11 @@ export default function AuthPage({ onAuthSuccess, onClose }: AuthPageProps) {
       }
 
     } catch (err: any) {
-      console.error("Authentication execution error:", err);
-      setErrorMsg(err?.message || "Supplied ecological Ranger Keycodes failed validation.");
+      console.warn("Authentication handling failed:", err?.message || err);
+      setErrorMsg(err?.message || "Supplied ecological Ranger Keycodes failed validation. Please double-check.");
     } finally {
       setIsSyncing(false);
     }
-  };
-
-  const handleDemoSignIn = (demoEmail: string) => {
-    setEmail(demoEmail);
-    setPassword("demo_secret_2026");
-    setIsSignUp(false);
-    setErrorMsg("");
   };
 
   return (
@@ -268,8 +314,13 @@ export default function AuthPage({ onAuthSuccess, onClose }: AuthPageProps) {
         <div className="relative z-10 w-full max-w-md rounded-3xl bg-gradient-to-b from-white/10 to-[#121212]/95 border border-white/10 shadow-2xl p-4 sm:p-6 flex flex-col items-center" id="auth-glass-card">
           
           {/* App Logo */}
-          <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-emerald-500/20 mb-3 shadow-lg border border-emerald-400/30 animate-pulse">
-            <Leaf className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400 fill-emerald-400" />
+          <div className="flex items-center justify-center w-16 h-16 bg-white rounded-2xl mb-3 shadow-lg border border-white/20 overflow-hidden transform transition-transform hover:scale-105 duration-200">
+            <img 
+              src={greenlensLogo} 
+              alt="GreenLens Cameroon Logo" 
+              className="w-full h-full object-contain p-0.5 rounded-[14px]" 
+              referrerPolicy="no-referrer"
+            />
           </div>
 
           {/* Brand Names & Subtitle */}
@@ -516,20 +567,6 @@ export default function AuthPage({ onAuthSuccess, onClose }: AuthPageProps) {
               )}
             </button>
 
-            {/* Google Identity Bypass (Single Sign On demo badge) */}
-            <button 
-              type="button" 
-              onClick={() => handleDemoSignIn("awahblaiseatanga@gmail.com")}
-              className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-b from-[#232526] to-[#2d2e30] border border-white/5 rounded-full px-4 py-2.5 font-bold text-white shadow-md hover:brightness-110 transition-all text-[11px] select-none cursor-pointer"
-            >
-              <img
-                src="https://www.svgrepo.com/show/475656/google-color.svg"
-                alt="Google"
-                className="w-4 h-4 shrink-0"
-              />
-              Continue with Google (Demo Bypass)
-            </button>
-
             {/* Toggle Sign-In / Sign-Up Mode selection trigger */}
             <div className="w-full text-center mt-1">
               <span className="text-[11px] text-emerald-100/50">
@@ -552,20 +589,6 @@ export default function AuthPage({ onAuthSuccess, onClose }: AuthPageProps) {
           </div>
 
         </form>
-
-        {/* Demo trigger badge shortcut */}
-        {!isSignUp && (
-          <div className="mt-4 w-full pt-3 border-t border-white/10 flex flex-col items-center gap-2" id="demo-shortcut-actions">
-            <span className="text-[8px] font-bold font-mono tracking-widest uppercase text-emerald-300/40">Registered Demonstration Identity</span>
-            <button
-              onClick={() => handleDemoSignIn("awahblaiseatanga@gmail.com")}
-              type="button"
-              className="text-[10px] w-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 font-bold px-3 py-2 rounded-xl border border-emerald-400/20 transition-all tracking-wide select-none cursor-pointer text-center"
-            >
-              Awah Atanga (Lead Ranger)
-            </button>
-          </div>
-        )}
 
       </div>
 

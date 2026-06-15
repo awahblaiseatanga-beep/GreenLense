@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Leaf } from "lucide-react";
 import AuthPage from "./AuthPage";
+import greenlensLogo from "../assets/images/greenlens_logo_1781522444785.jpg";
 
 interface WelcomePageProps {
   onStart: () => void;
@@ -185,8 +186,13 @@ export default function WelcomePage({ onStart, onAuthSuccess }: WelcomePageProps
       <main className="relative z-20 w-full h-full flex flex-col justify-center items-center px-6 md:px-12 max-w-4xl mx-auto text-center" id="welcome-content-card">
         {/* Logo Area */}
         <div className="mb-8 flex flex-col items-center animate-fadeIn" id="welcome-logo-wrapper">
-          <div className="w-20 h-20 bg-[#00450d] text-white rounded-2xl flex items-center justify-center mb-4 shadow-[0px_4px_6px_rgba(0,0,0,0.02),0px_10px_15px_rgba(27,94,32,0.15)] transform transition-transform hover:scale-105 duration-300 border border-emerald-900/35">
-            <Leaf className="h-10 w-10 text-emerald-350 fill-white" />
+          <div className="w-32 h-32 bg-white rounded-3xl p-1 flex items-center justify-center mb-4 shadow-[0px_4px_10px_rgba(0,0,0,0.1),0px_10px_25px_rgba(27,94,32,0.30)] transform transition-transform hover:scale-105 duration-300 border border-emerald-950/20">
+            <img 
+              src={greenlensLogo} 
+              alt="GreenLens Cameroon Logo" 
+              className="w-full h-full object-contain rounded-[22px]" 
+              referrerPolicy="no-referrer"
+            />
           </div>
           <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight drop-shadow-md">
             GreenLens
