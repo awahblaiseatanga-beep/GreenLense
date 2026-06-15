@@ -430,15 +430,17 @@ export async function insertLiveVerification(v: any): Promise<any | null> {
 /**
  * Up-to-date user levels, XP, and footprint analytics
  */
-export async function getLiveUserStats(): Promise<any | null> {
+export async function getLiveUserStats(email: string): Promise<any | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
+
+  if (!email) return null;
 
   try {
     const { data, error } = await supabase
       .from("users_stats")
       .select("*")
-      .eq("id", "user_main")
+      .eq("email", email)
       .single();
 
     if (error) {
@@ -464,9 +466,9 @@ export async function saveLiveUserStats(stats: any): Promise<any | null> {
 
   try {
     const dbRow = {
-      id: "user_main",
+      id: stats.email || "user_main",
       full_name: stats.fullName,
-      email: stats.fullName === "Awah Blaise Atanga" ? "awahblaiseatanga@gmail.com" : stats.email || "user@example.com",
+      email: stats.email || "user@example.com",
       level: stats.level,
       xp: stats.xp,
       contributions_count: stats.contributionsCount,

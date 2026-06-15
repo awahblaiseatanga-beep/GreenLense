@@ -21,7 +21,13 @@ import greenlensLogo from "./assets/images/greenlens_logo_1781522444785.jpg";
 type TabId = "explore" | "contribute" | "impact" | "insights" | "profile";
 
 export default function App() {
-  const [showWelcome, setShowWelcome] = useState(true);
+  const [showWelcome, setShowWelcome] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("greenlens_logged_in") !== "true";
+    } catch {
+      return true;
+    }
+  });
   const [activeTab, setActiveTab] = useState<TabId>("explore");
   
   // Hydrator with fail-safe defaults from localStorage to support remote Cameroon regions without any network
@@ -74,7 +80,22 @@ export default function App() {
       const orgsRes = await fetch("/api/organizations");
       const orgsData = await orgsRes.json();
 
-      const userRes = await fetch("/api/user-stats");
+      let userResUrl = "/api/user-stats";
+      if (userStats && userStats.email) {
+        userResUrl += `?email=${encodeURIComponent(userStats.email)}`;
+      } else {
+        const cached = localStorage.getItem("greenlens_userstats");
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (parsed.email) {
+              userResUrl += `?email=${encodeURIComponent(parsed.email)}`;
+            }
+          } catch(e) {}
+        }
+      }
+      
+      const userRes = await fetch(userResUrl);
       const userData = await userRes.json();
 
       if (catalogsRes.ok && orgsRes.ok && userRes.ok) {
@@ -100,6 +121,66 @@ export default function App() {
 
   useEffect(() => {
     refreshPlatformData();
+
+    // Check for active Supabase OAuth or Email sessions to restore session state immediately
+    const checkActiveSession = async () => {
+      try {
+        const { getSupabaseClient } = await import("./supabaseClient");
+        const activeSupabase = await getSupabaseClient();
+        if (activeSupabase) {
+          const { data: { session } } = await activeSupabase.auth.getSession();
+          if (session?.user) {
+            console.info("Discovered active Ranger session on Supabase:", session.user.email);
+            localStorage.setItem("greenlens_logged_in", "true");
+            setShowWelcome(false);
+
+            let statsToUse = null;
+            try {
+              const res = await fetch("/api/user-stats?email=" + encodeURIComponent(session.user.email || ""));
+              if (res.ok) {
+                const liveStats = await res.json();
+                if (liveStats && liveStats.email === session.user.email) {
+                  statsToUse = liveStats;
+                }
+              }
+            } catch(e) {}
+
+            if (!statsToUse) {
+              const cachedStatsStr = localStorage.getItem("greenlens_userstats");
+              if (cachedStatsStr) {
+                const cached = JSON.parse(cachedStatsStr);
+                if (cached && cached.email === session.user.email) {
+                  statsToUse = cached;
+                }
+              }
+            }
+
+            if (!statsToUse) {
+              statsToUse = {
+                email: session.user.email,
+                fullName: session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split("@")[0] || "Eco Ranger",
+                contributionsCount: 0,
+                verificationsCount: 0,
+                level: "Observer",
+                xp: 0,
+                ecoPulseScore: 50,
+                carbonFootprint: 140,
+                region: "South West",
+                city: "Buea",
+                townOrArrondissement: "Molyko",
+                neighborhood: "Mayour street",
+                role: "Citizen Scientist",
+              };
+            }
+            localStorage.setItem("greenlens_userstats", JSON.stringify(statsToUse));
+            setUserStats(statsToUse);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not retrieve active Supabase terminal authorization session:", err);
+      }
+    };
+    checkActiveSession();
 
     // Register offline / online network event listeners to coordinate auto sync
     const handleOnline = () => {
@@ -176,6 +257,27 @@ export default function App() {
     refreshPlatformData();
   };
 
+  const handleLogout = async () => {
+    try {
+      const { getSupabaseClient } = await import("./supabaseClient");
+      const activeSupabase = await getSupabaseClient();
+      if (activeSupabase) {
+        await activeSupabase.auth.signOut();
+      }
+    } catch (err) {
+      console.warn("Could not sign out of Supabase cleanly:", err);
+    }
+    
+    // Clean all session flags
+    localStorage.removeItem("greenlens_logged_in");
+    localStorage.removeItem("greenlens_userstats");
+    
+    // Reset React state variables
+    setUserStats(null);
+    setShowWelcome(true);
+    setActiveTab("explore");
+  };
+
   if (showWelcome) {
     return (
       <WelcomePage 
@@ -183,6 +285,7 @@ export default function App() {
         onAuthSuccess={(stats) => {
           setUserStats(stats);
           localStorage.setItem("greenlens_userstats", JSON.stringify(stats));
+          localStorage.setItem("greenlens_logged_in", "true");
         }}
       />
     );
@@ -278,6 +381,7 @@ export default function App() {
               <ContributeTab 
                 onObservationAdded={handleObservationAdded}
                 catalogsCount={catalogs.length}
+                userStats={userStats}
               />
             )}
             {activeTab === "impact" && (
@@ -300,6 +404,7 @@ export default function App() {
               <ProfileTab 
                 userStats={userStats} 
                 onEcoPulseSubmitted={() => refreshPlatformData()}
+                onLogout={handleLogout}
               />
             )}
           </div>

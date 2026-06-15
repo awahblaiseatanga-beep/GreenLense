@@ -115,9 +115,10 @@ const PRESET_PHOTOS = [
 interface ContributeTabProps {
   onObservationAdded: (newObs: any, catalog: any, userStats: any) => void;
   catalogsCount: number;
+  userStats: any;
 }
 
-export default function ContributeTab({ onObservationAdded, catalogsCount }: ContributeTabProps) {
+export default function ContributeTab({ onObservationAdded, catalogsCount, userStats }: ContributeTabProps) {
   // Navigation / Tab states
   const [activeTab, setActiveTab] = useState<"upload" | "presets" | "url">("upload");
 
@@ -252,7 +253,8 @@ export default function ContributeTab({ onObservationAdded, catalogsCount }: Con
           neighborhood: neighborhood || town,
           description,
           photoUrl: photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80",
-          reporterName: "Awah Blaise Atanga",
+          reporterName: userStats?.fullName || "Eco Scout",
+          reporterEmail: userStats?.email || "user@example.com",
           pollutionTag
         })
       });

@@ -830,7 +830,7 @@ async function startServer() {
 
   // API 4: Add user observation with deterministic scoring engine recalculations
   app.post("/api/observations", async (req, res) => {
-    const { catalogId, region, city, townOrArrondissement, neighborhood, description, photoUrl, reporterName, pollutionTag } = req.body;
+    const { catalogId, region, city, townOrArrondissement, neighborhood, description, photoUrl, reporterName, reporterEmail, pollutionTag } = req.body;
 
     if (!description) {
       return res.status(400).json({ error: "Observation description is required." });
@@ -1037,7 +1037,8 @@ async function startServer() {
         const updatedTargetCatalog = (reloadedCats || []).find(c => c.id === targetCatalog.id);
 
         // Update User Statistics Profile
-        const currentStats = await getLiveUserStats() || userStats;
+        const emailToUpdate = reporterEmail || userStats?.email || "awahblaiseatanga@gmail.com";
+        const currentStats = await getLiveUserStats(emailToUpdate) || userStats;
         currentStats.contributionsCount += 1;
         currentStats.xp += 30; // 30 XP per observation reward
 
@@ -1390,7 +1391,7 @@ async function startServer() {
             });
 
             // XP and status for verify
-            const currentStats = await getLiveUserStats() || userStats;
+            const currentStats = await getLiveUserStats(email || userStats?.email) || userStats;
             currentStats.verifiedCleanupsCount += 1;
             currentStats.xp += 15; // 15 XP reward
 
@@ -1492,7 +1493,7 @@ async function startServer() {
 
   // API 10: EcoPulse Daily Check-in submit
   app.post("/api/ecopulse", async (req, res) => {
-    const { transportMode, wasteSegregation, organicComposting, plasticReduction, energyConserved } = req.body;
+    const { transportMode, wasteSegregation, organicComposting, plasticReduction, energyConserved, email } = req.body;
 
     // General dynamic formula to derive new Eco score out of contributions and actions
     let dailyScore = 50;
@@ -1530,7 +1531,7 @@ async function startServer() {
 
     // Save Live Supabase Stats
     try {
-      const activeStats = await getLiveUserStats() || userStats;
+      const activeStats = await getLiveUserStats(email || userStats?.email) || userStats;
       activeStats.ecoPulseScore = Math.min(100, dailyScore);
       activeStats.carbonFootprint = Math.max(25, baseFootprint - reduction);
       activeStats.xp += 25; // 25 XP for EcoPulse daily commitment routine
@@ -1565,13 +1566,21 @@ async function startServer() {
   // API 11: Get single user stats profile
   app.get("/api/user-stats", async (req, res) => {
     try {
-      const liveStats = await getLiveUserStats();
+      const email = typeof req.query.email === "string" ? req.query.email : userStats?.email;
+      const liveStats = await getLiveUserStats(email);
       if (liveStats) {
         return res.json(liveStats);
       }
     } catch (err) {
       console.warn("Direct score statistics row query failed:", err?.message || err);
     }
+    
+    // Provide memory fallback if email was provided and exists in map
+    const email = typeof req.query.email === "string" ? req.query.email : userStats?.email;
+    if (email && registeredUsersMap[email]) {
+        return res.json(registeredUsersMap[email]);
+    }
+    
     res.json(userStats);
   });
 
@@ -1633,7 +1642,21 @@ async function startServer() {
       return res.status(400).json({ error: "Email and password are required." });
     }
     const normalizedEmail = email.trim().toLowerCase();
-    const foundUser = registeredUsersMap[normalizedEmail];
+    
+    let foundUser = null;
+    try {
+      const liveStats = await getLiveUserStats(normalizedEmail);
+      if (liveStats) {
+        foundUser = liveStats;
+        registeredUsersMap[normalizedEmail] = liveStats;
+      }
+    } catch (e) {
+      console.warn("Could not fetch user stats from live database:", e);
+    }
+    
+    if (!foundUser) {
+      foundUser = registeredUsersMap[normalizedEmail];
+    }
 
     if (!foundUser) {
       return res.status(404).json({ error: "Profile not found with this email registration. Try using the default demo account, or select 'Create Account'." });
@@ -1657,7 +1680,19 @@ async function startServer() {
       return res.status(400).json({ error: "Email is required for Google Sign-In verification." });
     }
     const normalizedEmail = email.trim().toLowerCase();
-    let foundUser = registeredUsersMap[normalizedEmail];
+    
+    let foundUser = null;
+    try {
+      const liveStats = await getLiveUserStats(normalizedEmail);
+      if (liveStats) {
+        foundUser = liveStats;
+        registeredUsersMap[normalizedEmail] = liveStats;
+      }
+    } catch (e) {}
+    
+    if (!foundUser) {
+      foundUser = registeredUsersMap[normalizedEmail];
+    }
 
     if (!foundUser) {
       // Auto-register user with default values for Cameroon locations

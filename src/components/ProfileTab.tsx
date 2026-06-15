@@ -72,9 +72,10 @@ const ECO_PULSE_QUESTIONS: QuestionConfig[] = [
 interface ProfileTabProps {
   userStats: UserStats;
   onEcoPulseSubmitted: (pulseAnswers: EcoPulseCheckIn) => void;
+  onLogout: () => void;
 }
 
-export default function ProfileTab({ userStats, onEcoPulseSubmitted }: ProfileTabProps) {
+export default function ProfileTab({ userStats, onEcoPulseSubmitted, onLogout }: ProfileTabProps) {
   const [transportMode, setTransportMode] = useState<string>("Walking/Biking/Public Transit");
   const [wasteSegregation, setWasteSegregation] = useState<any>("no");
   const [organicComposting, setOrganicComposting] = useState<any>("no");
@@ -175,7 +176,8 @@ export default function ProfileTab({ userStats, onEcoPulseSubmitted }: ProfileTa
           wasteSegregation,
           organicComposting,
           plasticReduction,
-          energyConserved
+          energyConserved,
+          email: userStats?.email
         })
       });
 
@@ -252,9 +254,19 @@ export default function ProfileTab({ userStats, onEcoPulseSubmitted }: ProfileTa
                 </span>
                 <h3 className="text-lg font-black text-gray-900 tracking-tight">Ranger Intelligence Hub</h3>
               </div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-full text-[10px] font-mono font-extrabold text-primary uppercase" id="ranger-online-badge">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>{pulseSubmitted ? "Stats Synchronized" : "Preview Tracking"}</span>
+              <div className="flex items-center gap-2" id="credentials-badge-container">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-full text-[10px] font-mono font-extrabold text-primary uppercase" id="ranger-online-badge">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>{pulseSubmitted ? "Stats Synchronized" : "Preview Tracking"}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 border border-red-200 hover:border-red-300 text-red-600 hover:text-red-700 text-[10px] font-mono font-extrabold uppercase rounded-full tracking-wider transition-all cursor-pointer font-bold shrink-0 select-none"
+                  id="profile-sign-out-trigger"
+                >
+                  SIGN OUT
+                </button>
               </div>
             </div>
 
