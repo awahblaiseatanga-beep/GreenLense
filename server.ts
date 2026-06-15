@@ -1650,6 +1650,59 @@ async function startServer() {
     res.json({ userStats: foundUser });
   });
 
+  // API 11d: Auth Google Sign-In or Automatic Registration
+  app.post("/api/auth/google", async (req, res) => {
+    const { email, fullName, picture } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "Email is required for Google Sign-In verification." });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    let foundUser = registeredUsersMap[normalizedEmail];
+
+    if (!foundUser) {
+      // Auto-register user with default values for Cameroon locations
+      const name = fullName || email.split("@")[0] || "Eco Ranger";
+      foundUser = {
+        email: normalizedEmail,
+        fullName: name,
+        contributionsCount: 0,
+        verificationsCount: 0,
+        level: "Observer",
+        xp: 0,
+        ecoPulseScore: 50,
+        carbonFootprint: 140,
+        region: "South West", // Default region
+        city: "Buea",       // Default city
+        townOrArrondissement: "Molyko",  // Default town
+        neighborhood: "Mayour street", // Sensible default
+        phone: "+237 ",
+        role: "Citizen Scientist"
+      };
+
+      registeredUsersMap[normalizedEmail] = foundUser;
+      try {
+        await saveLiveUserStats(foundUser);
+      } catch (e) {
+        console.warn("Could not save new Google user to DB:", e);
+      }
+    } else {
+      // We can preserve or update their avatar/fullName if they prefer, but keeping the registered details is safer.
+      if (fullName && !foundUser.fullName) {
+        foundUser.fullName = fullName;
+      }
+    }
+
+    userStats = foundUser;
+
+    try {
+      await saveLiveUserStats(foundUser);
+    } catch (e) {
+      console.warn("Could not edit live session for Google signin:", e);
+    }
+
+    res.json({ userStats: foundUser });
+  });
+
   // API 11c: Auth Sign Out Logout
   app.post("/api/auth/logout", (req, res) => {
     userStats = registeredUsersMap["awahblaiseatanga@gmail.com"];
@@ -1743,6 +1796,62 @@ ${activityClause}
     res.json({
       insight: fallbackInsight
     });
+  });
+
+  // Support both versions of callback path with and without trailing slash
+  app.get(["/auth/callback", "/auth/callback/"], (req, res) => {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Google Sign In Callback</title>
+          <style>
+            body {
+              font-family: system-ui, -apple-system, sans-serif;
+              background-color: #090d16;
+              color: #ffffff;
+              display: flex;
+              height: 100vh;
+              align-items: center;
+              justify-content: center;
+              margin: 0;
+              text-align: center;
+            }
+            .spinner {
+              border: 3px solid rgba(255, 255, 255, 0.1);
+              border-top: 3px solid #10b981;
+              border-radius: 50%;
+              width: 32px;
+              height: 32px;
+              animation: spin 1s linear infinite;
+              margin: 0 auto 16px auto;
+            }
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          </style>
+        </head>
+        <body>
+          <div>
+            <div class="spinner"></div>
+            <h3>Authenticating, please wait...</h3>
+            <p>We are verifying your Google Ranger identity token.</p>
+          </div>
+          <script>
+            // Supabase OAuth returns access_token / refresh_token in URL Hash
+            const hash = window.location.hash || window.location.search;
+            if (window.opener) {
+              window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', hash: hash }, '*');
+              window.close();
+            } else {
+              // Fallback
+              window.location.href = '/' + hash;
+            }
+          </script>
+        </body>
+      </html>
+    `);
   });
 
   // Mount Vite middleware for development

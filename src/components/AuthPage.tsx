@@ -71,6 +71,20 @@ const CAMEROON_LOCATIONS: Record<string, Record<string, string[]>> = {
   }
 };
 
+// Helper to parse JWT tokens on client-side safely without external dependencies
+function parseJwt(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch(e) {
+    return null;
+  }
+}
+
 interface AuthPageProps {
   onAuthSuccess: (userStats: UserStats) => void;
   onClose: () => void;
@@ -82,6 +96,157 @@ export default function AuthPage({ onAuthSuccess, onClose }: AuthPageProps) {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Trigger Supabase OAuth sign-in flow for Google
+  const handleGoogleOAuthSignIn = async () => {
+    setIsSyncing(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      const activeSupabase = await getSupabaseClient();
+      if (!activeSupabase) {
+        throw new Error("Supabase Database connection is running in offline simulation mode. Please enter real credentials first.");
+      }
+
+      // Generate accurate callback URL matching current environment
+      const redirectUri = `${window.location.origin}/auth/callback`;
+
+      const { data, error } = await activeSupabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUri,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.url) {
+        // Open the authorization link inside a popup to bypass iframe sandbox limits
+        const authWindow = window.open(data.url, "oauth_popup", "width=600,height=700");
+        if (!authWindow) {
+          alert("Our popup was blocked! To authorize your Google Identity, please allow popups in your browser settings.");
+        }
+      } else {
+        throw new Error("The Supabase platform did not return a valid Google authorization path.");
+      }
+    } catch (err: any) {
+      console.error("Supabase Google Sign-In initialization exception:", err);
+      setErrorMsg(err?.message || "Failed to establish Google secure connection gateway.");
+      setIsSyncing(false);
+    }
+  };
+
+  // Listen for callback messages from our OAuth popup
+  useEffect(() => {
+    const handleAuthMessage = async (event: MessageEvent) => {
+      // Validate origin is from standard domains to ensure security
+      const origin = event.origin;
+      if (!origin.endsWith(".run.app") && !origin.includes("localhost") && !origin.includes("127.0.0.1")) {
+        return;
+      }
+
+      if (event.data?.type === "OAUTH_AUTH_SUCCESS") {
+        const hashOrQuery = event.data.hash || "";
+        if (!hashOrQuery) return;
+
+        setIsSyncing(true);
+        setErrorMsg("");
+        setSuccessMsg("Callback received! Completing Secure Verification...");
+
+        try {
+          const activeSupabase = await getSupabaseClient();
+          if (!activeSupabase) {
+            throw new Error("Supabase is missing or unauthorized.");
+          }
+
+          let userMail = "";
+          let userName = "";
+
+          // Case 1: Implicit flow hash (#access_token=...&refresh_token=...)
+          if (hashOrQuery.includes("access_token=")) {
+            const params = new URLSearchParams(hashOrQuery.replace("#", "?"));
+            const access_token = params.get("access_token");
+            const refresh_token = params.get("refresh_token");
+
+            if (access_token && refresh_token) {
+              const { data, error } = await activeSupabase.auth.setSession({
+                access_token,
+                refresh_token,
+              });
+              if (error) throw error;
+              userMail = data?.user?.email || "";
+              userName = data?.user?.user_metadata?.full_name || data?.user?.user_metadata?.name || "";
+            }
+          }
+          // Case 2: PKCE flow code (?code=...)
+          else if (hashOrQuery.includes("code=")) {
+            const params = new URLSearchParams(hashOrQuery);
+            const code = params.get("code");
+            if (code) {
+              const { data, error } = await activeSupabase.auth.exchangeCodeForSession(code);
+              if (error) throw error;
+              userMail = data?.user?.email || "";
+              userName = data?.user?.user_metadata?.full_name || data?.user?.user_metadata?.name || "";
+            }
+          }
+
+          // Case 3: If Supabase set the session automatically or we retrieved active user session
+          if (!userMail) {
+            const { data: { session } } = await activeSupabase.auth.getSession();
+            if (session?.user) {
+              userMail = session.user.email || "";
+              userName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || "";
+            }
+          }
+
+          if (userMail) {
+            // Synchronize user profile with Express server database state
+            const res = await fetch("/api/auth/google", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: userMail,
+                fullName: userName,
+              }),
+            });
+
+            const textData = await res.text();
+            let parsedData: any = {};
+            try {
+              parsedData = textData ? JSON.parse(textData) : {};
+            } catch (e) {
+              console.error("Non-JSON google sign-in response:", textData);
+            }
+
+            if (res.ok) {
+              setSuccessMsg("Google Identity verified successfully! Elevating system clearance...");
+              setTimeout(() => {
+                onAuthSuccess(parsedData.userStats);
+              }, 1200);
+            } else {
+              throw new Error(parsedData.error || parsedData.message || textData || "Google Ranger sync failed.");
+            }
+          } else {
+            throw new Error("Unable to extract valid auth session details from Supabase callback.");
+          }
+        } catch (err: any) {
+          console.error("Critical Google OAuth Complete Error:", err);
+          setErrorMsg(err?.message || "Failed to complete Google OAuth handshake.");
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    window.addEventListener("message", handleAuthMessage);
+    return () => window.removeEventListener("message", handleAuthMessage);
+  }, [onAuthSuccess]);
 
   // Common Fields
   const [email, setEmail] = useState("");
@@ -573,6 +738,45 @@ export default function AuthPage({ onAuthSuccess, onClose }: AuthPageProps) {
                 </>
               )}
             </button>
+
+            {/* Elegant Divider */}
+            <div className="flex items-center gap-2 my-1">
+              <div className="h-[1px] flex-1 bg-white/10" />
+              <span className="text-[9px] font-mono font-bold tracking-wider text-emerald-300/40 uppercase">OR SECURE CHANNEL</span>
+              <div className="h-[1px] flex-1 bg-white/10" />
+            </div>
+
+            {/* Google Sign-In Container */}
+            <div className="w-full flex justify-center py-0.5" id="google-signin-wrapper">
+              <button
+                type="button"
+                onClick={handleGoogleOAuthSignIn}
+                disabled={isSyncing}
+                className="w-full min-h-[42px] flex items-center justify-center gap-3 transition-all bg-zinc-950 border border-white/10 hover:border-emerald-500/50 hover:bg-zinc-900 rounded-xl overflow-hidden cursor-pointer select-none text-white font-bold text-xs active:scale-[0.99] disabled:opacity-50"
+                id="google-oauth-btn"
+              >
+                {/* Google clean SVG icon */}
+                <svg className="h-4.5 w-4.5 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.04c1.5 0 2.85.51 3.91 1.51l2.92-2.92C17.07 1.95 14.73 1 12 1 7.37 1 3.4 3.66 1.51 7.55l3.52 2.73C5.87 7.04 8.7 5.04 12 5.04z"
+                  />
+                  <path
+                    fill="#4285F4"
+                    d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.43h6.45c-.28 1.48-1.12 2.74-2.38 3.58l3.61 2.8c2.11-1.95 3.81-4.8 3.81-8.47z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.03 14.72c-.22-.66-.35-1.37-.35-2.1s.13-1.44.35-2.1L1.51 7.55C.54 9.48 0 11.68 0 14s.54 4.52 1.51 6.45l3.52-2.73z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c3.24 0 5.97-1.07 7.96-2.92l-3.61-2.8c-1.1.74-2.52 1.18-4.35 1.18-3.3 0-6.13-2-6.97-5.24H1.51l-3.52 2.73C3.4 20.34 7.37 23 12 23z"
+                  />
+                </svg>
+                <span>{isSignUp ? "SIGN UP WITH GOOGLE" : "SIGN IN WITH GOOGLE"}</span>
+              </button>
+            </div>
 
             {/* Toggle Sign-In / Sign-Up Mode selection trigger */}
             <div className="w-full text-center mt-1">
