@@ -61,6 +61,7 @@ export function handleSupabaseError(context: string, err: any): void {
 // --------------------------------------------------------------------
 
 export function mapCatalogToClient(row: any, observations: any[] = [], campaigns: any[] = []): any {
+  if (!row) return null;
   return {
     id: row.id,
     region: row.region,
@@ -77,12 +78,13 @@ export function mapCatalogToClient(row: any, observations: any[] = [], campaigns
       lon: row.coordinates_lon,
     },
     trends: [], // Loaded from catalog_trends if necessary or calculated
-    observations: (observations || []).map((o: any) => mapObservationToClient(o)),
-    campaigns: (campaigns || []).map((c: any) => mapCampaignToClient(c)),
+    observations: (observations || []).map((o: any) => mapObservationToClient(o)).filter(Boolean),
+    campaigns: (campaigns || []).map((c: any) => mapCampaignToClient(c)).filter(Boolean),
   };
 }
 
 export function mapObservationToClient(row: any): any {
+  if (!row) return null;
   return {
     id: row.id,
     catalogId: row.catalog_id,
@@ -98,6 +100,7 @@ export function mapObservationToClient(row: any): any {
 }
 
 export function mapOrganizationToClient(row: any): any {
+  if (!row) return null;
   return {
     id: row.id,
     name: row.name,
@@ -111,6 +114,7 @@ export function mapOrganizationToClient(row: any): any {
 }
 
 export function mapCampaignToClient(row: any, verifications: any[] = []): any {
+  if (!row) return null;
   return {
     id: row.id,
     organizationName: row.organization_name,
@@ -123,12 +127,13 @@ export function mapCampaignToClient(row: any, verifications: any[] = []): any {
     beforeImage: row.before_image,
     afterImage: row.after_image,
     verifiedImprovementScore: row.verified_improvement_score,
-    verifications: verifications.map(mapVerificationToClient),
+    verifications: verifications.map(mapVerificationToClient).filter(Boolean),
     verificationsCount: verifications.length,
   };
 }
 
 export function mapVerificationToClient(row: any): any {
+  if (!row) return null;
   return {
     id: row.id,
     campaignId: row.campaign_id,
@@ -139,6 +144,7 @@ export function mapVerificationToClient(row: any): any {
 }
 
 export function mapUserStatsToClient(row: any): any {
+  if (!row) return null;
   return {
     fullName: row.full_name,
     email: row.email,
