@@ -670,17 +670,28 @@ let organizations: any[] = [
   }
 ];
 
-// User stats engine
-let userStats = {
-  email: "awahblaiseatanga@gmail.com",
-  fullName: "Awah Blaise Atanga",
-  contributionsCount: 3,
-  verificationsCount: 5,
-  level: "Observer" as any, // Observer → Eco Scout → Community Guardian → Environmental Advocate → Green Champion
-  xp: 140, // level threshold: <100: Observer, 100-250: Eco Scout, 250-500: Community Guardian, 500-1000: Env Advocate, 1000+: Green Champion
-  ecoPulseScore: 78,
-  carbonFootprint: 112 // in kg CO2 e.g. per week
+// Registered users database map in memory
+let registeredUsersMap: Record<string, any> = {
+  "awahblaiseatanga@gmail.com": {
+    email: "awahblaiseatanga@gmail.com",
+    fullName: "Awah Blaise Atanga",
+    contributionsCount: 3,
+    verificationsCount: 5,
+    level: "Eco Scout",
+    xp: 140,
+    ecoPulseScore: 78,
+    carbonFootprint: 112,
+    region: "Centre",
+    city: "Yaoundé",
+    townOrArrondissement: "Yaoundé VI (Melen)",
+    neighborhood: "Melen",
+    phone: "+237 677 890 123",
+    role: "Eco Scout"
+  }
 };
+
+// User stats engine referenced to the current active session user
+let userStats: any = registeredUsersMap["awahblaiseatanga@gmail.com"];
 
 // Perform initial deterministic score calculations for catalogs
 catalogs.forEach((c) => {
@@ -1562,6 +1573,74 @@ async function startServer() {
       console.warn("Direct score statistics row query failed:", err?.message || err);
     }
     res.json(userStats);
+  });
+
+  // API 11a: Auth Sign Up Register
+  app.post("/api/auth/register", async (req, res) => {
+    const { email, fullName, password, phone, region, city, townOrArrondissement, neighborhood, role, organizationName } = req.body;
+    if (!email || !fullName || !password) {
+      return res.status(400).json({ error: "Email, full name, and password are required to register." });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    const newUser = {
+      email: normalizedEmail,
+      fullName: fullName.trim(),
+      contributionsCount: 0,
+      verificationsCount: 0,
+      level: "Observer" as any,
+      xp: 0,
+      ecoPulseScore: 50,
+      carbonFootprint: 140,
+      region: region || "Centre",
+      city: city || "Yaoundé",
+      townOrArrondissement: townOrArrondissement || "Yaoundé VI (Melen)",
+      neighborhood: neighborhood || "Melen",
+      phone: phone || "+237 ",
+      role: role || "Citizen Scientist",
+      organizationName: organizationName || undefined
+    };
+
+    registeredUsersMap[normalizedEmail] = newUser;
+    userStats = newUser;
+
+    try {
+      await saveLiveUserStats(newUser);
+    } catch (e) {
+      console.warn("Could not save registered user stats to database:", e);
+    }
+
+    res.status(201).json({ userStats: newUser });
+  });
+
+  // API 11b: Auth Sign In Login
+  app.post("/api/auth/login", async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required." });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const foundUser = registeredUsersMap[normalizedEmail];
+
+    if (!foundUser) {
+      return res.status(404).json({ error: "Profile not found with this email registration. Try using the default demo account, or select 'Create Account'." });
+    }
+
+    userStats = foundUser;
+
+    try {
+      await saveLiveUserStats(foundUser);
+    } catch (e) {
+      console.warn("Could not update live session database statistics:", e);
+    }
+
+    res.json({ userStats: foundUser });
+  });
+
+  // API 11c: Auth Sign Out Logout
+  app.post("/api/auth/logout", (req, res) => {
+    userStats = registeredUsersMap["awahblaiseatanga@gmail.com"];
+    res.json({ success: true, userStats });
   });
 
 

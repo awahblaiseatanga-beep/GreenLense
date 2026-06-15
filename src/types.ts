@@ -114,6 +114,13 @@ export interface UserStats {
   xp: number;
   ecoPulseScore: number; // general eco score
   carbonFootprint: number; // in kg CO2 per week
+  region?: CameroonRegion;
+  city?: string;
+  townOrArrondissement?: string;
+  neighborhood?: string;
+  phone?: string;
+  role?: "Citizen Scientist" | "Eco Scout" | "Community Guardian" | "Environmental Advocate" | "Green Champion" | "NGO Representative";
+  organizationName?: string;
 }
 
 export interface EcoPulseCheckIn {

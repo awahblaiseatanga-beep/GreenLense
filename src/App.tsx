@@ -176,7 +176,15 @@ export default function App() {
   };
 
   if (showWelcome) {
-    return <WelcomePage onStart={() => setShowWelcome(false)} />;
+    return (
+      <WelcomePage 
+        onStart={() => setShowWelcome(false)} 
+        onAuthSuccess={(stats) => {
+          setUserStats(stats);
+          localStorage.setItem("greenlens_userstats", JSON.stringify(stats));
+        }}
+      />
+    );
   }
 
   return (

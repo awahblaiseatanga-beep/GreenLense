@@ -3,16 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Leaf } from "lucide-react";
+import AuthPage from "./AuthPage";
 
 interface WelcomePageProps {
   onStart: () => void;
+  onAuthSuccess: (userStats: any) => void;
 }
 
-export default function WelcomePage({ onStart }: WelcomePageProps) {
+export default function WelcomePage({ onStart, onAuthSuccess }: WelcomePageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -203,21 +206,25 @@ export default function WelcomePage({ onStart }: WelcomePageProps) {
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto items-center justify-center pt-2 animate-fadeIn" id="welcome-actions">
           <button
-            onClick={onStart}
-            className="w-full sm:w-auto px-8 py-3.5 bg-[#00450d] hover:bg-emerald-900 text-white hover:text-[#90d689] rounded-full text-xs font-bold tracking-wider uppercase transition-all shadow-md hover:shadow-[0px_10px_15px_rgba(27,94,32,0.15)] hover:-translate-y-0.5 duration-200 cursor-pointer"
+            onClick={() => setShowAuthModal(true)}
+            className="w-full sm:w-auto px-10 py-4 bg-[#00450d] hover:bg-emerald-900 border border-emerald-950 text-[#fff] hover:text-emerald-100 rounded-full text-xs font-black tracking-widest uppercase transition-all shadow-lg hover:shadow-[0px_10px_20px_rgba(27,94,32,0.3)] hover:-translate-y-0.5 duration-200 cursor-pointer"
             id="welcome-start-btn"
           >
-            Get Started
-          </button>
-          <button
-            onClick={onStart}
-            className="w-full sm:w-auto px-8 py-3.5 bg-white/20 backdrop-blur-md border border-white/30 text-white rounded-full text-xs font-bold tracking-wider uppercase hover:bg-white/30 transition-all hover:-translate-y-0.5 duration-200 cursor-pointer"
-            id="welcome-explore-btn"
-          >
-            Explore Platform
+            Authorized Ranger Access
           </button>
         </div>
       </main>
+
+      {/* Dynamic Auth overlays signup/signin page */}
+      {showAuthModal && (
+        <AuthPage 
+          onAuthSuccess={(stats) => {
+            onAuthSuccess(stats);
+            onStart();
+          }}
+          onClose={() => setShowAuthModal(false)}
+        />
+      )}
     </div>
   );
 }

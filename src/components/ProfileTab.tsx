@@ -265,16 +265,24 @@ export default function ProfileTab({ userStats, onEcoPulseSubmitted }: ProfileTa
                 <span className="text-gray-900 font-bold block truncate">{userStats.email}</span>
               </div>
               <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
-                <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider font-mono">Autonomous ID</span>
-                <span className="text-gray-900 font-bold block font-mono">GL-REG-4491-CM</span>
+                <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider font-mono">Account ID Sector</span>
+                <span className="text-gray-900 font-bold block font-mono">
+                  {userStats.role === "NGO Representative" && userStats.organizationName 
+                    ? `NGO: ${userStats.organizationName}` 
+                    : (userStats.role || "Citizen Scientist")}
+                </span>
               </div>
               <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
-                <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider font-mono">Territory Coordinates</span>
-                <span className="text-gray-900 font-bold block font-mono">Cameroon Autonomous Hubs</span>
+                <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider font-mono">Ranger Territory</span>
+                <span className="text-gray-900 font-bold block truncate">
+                  {userStats.neighborhood ? `${userStats.neighborhood}, ${userStats.city}` : "Cameroon Autonomous Hubs"}
+                </span>
               </div>
               <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
-                <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider font-mono">Ecological Rank Status</span>
-                <span className="text-gray-900 font-bold block">{userStats.level} Rank</span>
+                <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider font-mono">Ecological Rank / Region</span>
+                <span className="text-gray-900 font-bold block truncate">
+                  {userStats.level} Rank {userStats.region ? `(${userStats.region})` : ""}
+                </span>
               </div>
             </div>
 
