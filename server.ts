@@ -1583,9 +1583,14 @@ async function startServer() {
     }
     
     // Provide memory fallback if email was provided and exists in map
-    const email = typeof req.query.email === "string" ? req.query.email : userStats?.email;
-    if (email && registeredUsersMap[email]) {
-        return res.json(registeredUsersMap[email]);
+    const emailToUse = typeof req.query.email === "string" ? req.query.email : userStats?.email;
+    if (emailToUse && registeredUsersMap[emailToUse]) {
+        return res.json(registeredUsersMap[emailToUse]);
+    }
+    
+    // If client requested a specific email that doesn't exist, don't return the global seed
+    if (typeof req.query.email === "string" && req.query.email !== userStats?.email) {
+      return res.status(404).json({ error: "User not found" });
     }
     
     res.json(userStats);
