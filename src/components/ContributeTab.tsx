@@ -268,13 +268,13 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
     setIsAnalyzing(true);
     setStatusMessage("Classifying indicators and updating catalog database...");
 
-    try {
-      // Create specific catalog identifier e.g. LOC_MLN_YAO_CEN_CMR
-      const rCode = region.substring(0, 3).toUpperCase();
-      const cCode = city.substring(0, 3).toUpperCase();
-      const nCode = (neighborhood || town).substring(0, 3).toUpperCase();
-      const generatedCatalogId = `LOC_${nCode}_${cCode}_${rCode}_CMR`;
+    // Create specific catalog identifier e.g. LOC_MLN_YAO_CEN_CMR
+    const rCode = region.substring(0, 3).toUpperCase();
+    const cCode = city.substring(0, 3).toUpperCase();
+    const nCode = (neighborhood || town).substring(0, 3).toUpperCase();
+    const generatedCatalogId = `LOC_${nCode}_${cCode}_${rCode}_CMR`;
 
+    try {
       const response = await fetch("/api/observations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
