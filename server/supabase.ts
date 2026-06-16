@@ -154,6 +154,13 @@ export function mapUserStatsToClient(row: any): any {
     verifiedCleanupsCount: row.verified_cleanups_count,
     ecoPulseScore: row.eco_pulse_score,
     carbonFootprint: row.carbon_footprint,
+    region: row.region,
+    city: row.city,
+    townOrArrondissement: row.town_or_arrondissement,
+    neighborhood: row.neighborhood,
+    phone: row.phone,
+    role: row.role,
+    organizationName: row.organization_name
   };
 }
 
@@ -475,6 +482,13 @@ export async function saveLiveUserStats(stats: any): Promise<any | null> {
       verified_cleanups_count: stats.verifiedCleanupsCount,
       eco_pulse_score: stats.ecoPulseScore,
       carbon_footprint: stats.carbonFootprint,
+      region: stats.region,
+      city: stats.city,
+      town_or_arrondissement: stats.townOrArrondissement,
+      neighborhood: stats.neighborhood,
+      phone: stats.phone,
+      role: stats.role,
+      organization_name: stats.organizationName
     };
 
     const { data, error } = await supabase

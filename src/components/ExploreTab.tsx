@@ -86,6 +86,57 @@ export default function ExploreTab({ catalogs, onSelectCatalog, onNavigateToInsi
         </div>
       </div>
 
+      {/* RECENT LIVE FEED */}
+      <div className="max-w-3xl mx-auto w-full space-y-4" id="explore-live-feed-module">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-gray-800 font-mono flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full border-2 border-green-500 bg-green-500 animate-pulse"></span>
+            Live Community Feed
+          </h2>
+          <span className="text-[10px] text-gray-400 font-mono uppercase">Global Database Sync</span>
+        </div>
+        
+        {(() => {
+          const allObservations = catalogs.flatMap(cat => 
+            (cat.observations || []).map(obs => ({ ...obs, locationData: `${cat.neighborhood}, ${cat.city}` }))
+          ).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+          return allObservations.length === 0 ? (
+            <div className="p-4 bg-gray-50 text-center rounded-xl border border-dashed border-gray-200">
+              <p className="text-xs text-gray-500 font-mono italic">No community observations recorded yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {allObservations.slice(0, 4).map((obs) => (
+                <div key={obs.id} className="flex gap-3 bg-white border border-gray-200 p-3 rounded-xl shadow-xs hover:border-primary/30 transition-colors">
+                  <div className="h-16 w-16 bg-gray-100 rounded-lg overflow-hidden shrink-0 border border-gray-100">
+                    {obs.photoUrl ? (
+                      <img src={obs.photoUrl} alt="Report" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-gray-400">
+                        <MapPin className="h-6 w-6 opacity-30" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 pr-1">
+                    <div className="flex justify-between items-start mb-0.5">
+                      <span className="text-xs font-bold text-gray-900 truncate pr-2">{obs.reporterName}</span>
+                      <span className="text-[9px] text-gray-400 font-mono shrink-0 whitespace-nowrap">
+                        {new Date(obs.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 font-mono truncate mb-1 text-primary">{obs.locationData}</p>
+                    <p className="text-[11px] text-gray-600 line-clamp-2 leading-tight">
+                      {obs.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+
       {/* Centered Main Feed Container */}
       <div className="max-w-3xl mx-auto w-full" id="explore-grid">
         

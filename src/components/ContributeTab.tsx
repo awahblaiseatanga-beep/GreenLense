@@ -186,17 +186,50 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
       setStatusMessage("Encoding high-res photo bytes...");
       
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoUrl(reader.result as string);
-        
-        // Simulate immediate frontend loading effect for AI processing
-        setTimeout(() => {
-          setStatusMessage("Contacting GreenLens AI server...");
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 1000;
+          const MAX_HEIGHT = 1000;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round(height * (MAX_WIDTH / width));
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round(width * (MAX_HEIGHT / height));
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            // Compress heavily for Netlify serverless limit
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+            setPhotoUrl(dataUrl);
+          } else {
+            // Fallback
+            setPhotoUrl(event.target?.result as string);
+          }
+
+          // Simulate immediate frontend loading effect for AI processing
           setTimeout(() => {
-            setIsAnalyzing(false);
-            setStatusMessage("");
-          }, 1200);
-        }, 1000);
+            setStatusMessage("Contacting GreenLens AI server...");
+            setTimeout(() => {
+              setIsAnalyzing(false);
+              setStatusMessage("");
+            }, 500);
+          }, 500);
+        };
+        img.src = event.target?.result as string;
       };
       reader.readAsDataURL(file);
     }
@@ -259,7 +292,15 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
         })
       });
 
-      const data = await response.json();
+      let data;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        data = await response.json();
+      } else {
+        const textResponse = await response.text();
+        throw new Error(`Server returned a non-JSON response (${response.status}): ${textResponse.substring(0, 100)}...`);
+      }
+
       if (response.ok) {
         setSuccessResponse(data);
         onObservationAdded(data.observation, data.catalog, data.userStats);
@@ -272,9 +313,9 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
         setIsAnalyzing(false);
         setStatusMessage("");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Transmission error:", err);
-      alert("Communication error, check server terminal connections.");
+      alert(`Network/Server error: ${err.message || "Please check server terminal connections and try again."}`);
       setIsAnalyzing(false);
       setStatusMessage("");
     }

@@ -112,6 +112,13 @@ create table if not exists public.users_stats (
     verified_cleanups_count integer not null default 2,
     eco_pulse_score integer not null default 84,
     carbon_footprint integer not null default 112,
+    region text default 'South West',
+    city text default 'Buea',
+    town_or_arrondissement text default 'Molyko',
+    neighborhood text default 'Mayour street',
+    phone text,
+    role text default 'Citizen Scientist',
+    organization_name text,
     created_at timestamp with time zone default now()
 );
 

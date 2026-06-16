@@ -1904,9 +1904,34 @@ ${activityClause}
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`GreenLens Express Server running on port ${PORT}`);
+  return app;
+}
+
+const appPromise = startServer();
+
+export const handler = async (event: any, context: any) => {
+  const serverless = (await import('serverless-http')).default;
+  const app = await appPromise;
+  
+  // Clone the event to safely modify the path
+  const proxyEvent = Object.assign({}, event);
+  
+  // Normalize Netlify function path suffix to match standard Express routes
+  if (proxyEvent.path && proxyEvent.path.startsWith('/.netlify/functions/api')) {
+    proxyEvent.path = proxyEvent.path.replace('/.netlify/functions/api', '/api');
+  }
+
+  const handlerFn = serverless(app);
+  return handlerFn(proxyEvent, context);
+};
+
+if (process.env.NODE_ENV !== "test" && typeof require !== 'undefined' && require.main === module || process.argv[1].endsWith('server.ts') || process.argv[1].endsWith('server.cjs')) {
+  appPromise.then(app => {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`GreenLens Express Server running on port ${PORT}`);
+    });
   });
 }
 
-startServer();
+export default appPromise;
