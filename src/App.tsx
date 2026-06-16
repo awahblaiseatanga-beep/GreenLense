@@ -69,6 +69,7 @@ export default function App() {
   const [selectedCatalog, setSelectedCatalog] = useState<EnvironmentalCatalog | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+  const [showOfflineBanner, setShowOfflineBanner] = useState(true);
 
   // Sync state from server Express API - with robust offline fallbacks
   const refreshPlatformData = async () => {
@@ -167,10 +168,23 @@ export default function App() {
         localStorage.setItem("greenlens_userstats", JSON.stringify(userData));
         setIsOfflineMode(false);
       } else {
-        setIsOfflineMode(true);
+        throw new Error("One or more APIs returned a non-200 response.");
       }
     } catch (err) {
       console.warn("Environmental platform is currently operating in local-first offline fallback mode:", err);
+      
+      try {
+        const cachedCats = localStorage.getItem("greenlens_catalogs");
+        const cachedOrgs = localStorage.getItem("greenlens_organizations");
+        const cachedStats = localStorage.getItem("greenlens_userstats");
+        
+        if (cachedCats) setCatalogs(JSON.parse(cachedCats));
+        if (cachedOrgs) setOrganizations(JSON.parse(cachedOrgs));
+        if (cachedStats) setUserStats(JSON.parse(cachedStats));
+      } catch (e) {
+        console.warn("Failed to load cached fallback data:", e);
+      }
+
       setIsOfflineMode(true);
     } finally {
       setIsLoading(false);
@@ -397,17 +411,24 @@ export default function App() {
       </header>
 
       {/* Offline Fallback Banner */}
-      {isOfflineMode && (
-        <div className="bg-amber-600 text-white text-xs py-2 px-6 flex flex-col sm:flex-row gap-2 items-center justify-between shadow-xs border-b border-amber-700 animate-fadeIn" id="offline-mode-indicator-banner">
+      {isOfflineMode && showOfflineBanner && (
+        <div className="bg-amber-600 text-white text-xs py-2 px-6 flex flex-col sm:flex-row gap-2 items-center justify-between shadow-xs border-b border-amber-700 animate-fadeIn relative pr-10" id="offline-mode-indicator-banner">
           <div className="flex items-center gap-2">
             <WifiOff className="h-4 w-4 text-amber-200 animate-pulse shrink-0" />
             <span className="font-semibold text-center sm:text-left">
-              Running offline in Cameroon. Viewing cached environmental reports & administrative catalogs.
+              Running offline or Netlify serverless proxy disconnected. Viewing cached fallback catalogs.
             </span>
           </div>
           <div className="text-[9px] font-mono font-bold tracking-widest uppercase bg-amber-700 hover:bg-amber-800 transition-colors px-2 py-1 rounded text-amber-50 shrink-0">
             GreenLens Local Cache Active
           </div>
+          <button 
+            onClick={() => setShowOfflineBanner(false)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-amber-700 transition"
+            aria-label="Close"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
         </div>
       )}
 
