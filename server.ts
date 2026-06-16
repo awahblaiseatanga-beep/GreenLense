@@ -1933,6 +1933,9 @@ export const handler = async (event: any, context: any) => {
   return handlerFn(proxyEvent, context);
 };
 
+// Export appPromise for Vercel
+export { appPromise };
+
 if (process.env.NODE_ENV !== "test" && typeof require !== 'undefined' && require.main === module || process.argv[1].endsWith('server.ts') || process.argv[1].endsWith('server.cjs')) {
   appPromise.then(app => {
     const PORT = process.env.PORT || 3000;
