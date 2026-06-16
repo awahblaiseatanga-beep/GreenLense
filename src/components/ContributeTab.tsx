@@ -314,8 +314,60 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
         setStatusMessage("");
       }
     } catch (err: any) {
-      console.error("Transmission error:", err);
-      alert(`Network/Server error: ${err.message || "Please check server terminal connections and try again."}`);
+      console.warn("Transmission error, shifting to offline backup mode:", err);
+      
+      const payload = {
+        id: "obs_offline_" + Date.now(),
+        catalogId: generatedCatalogId,
+        region,
+        city,
+        townOrArrondissement: town,
+        neighborhood: neighborhood || town,
+        description,
+        photoUrl: photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80",
+        reporterName: userStats?.fullName || "Eco Scout",
+        reporterEmail: userStats?.email || "user@example.com",
+        timestamp: new Date().toISOString(),
+        aiClassification: {
+          indicator: "Needs server analysis",
+          threatLevel: "Moderate",
+          sentiment: pollutionTag
+        }
+      };
+
+      try {
+        const existingStr = localStorage.getItem("greenlens_pending_observations");
+        const pending = existingStr ? JSON.parse(existingStr) : [];
+        pending.push(payload);
+        localStorage.setItem("greenlens_pending_observations", JSON.stringify(pending));
+        
+        // Optimistic UI Update
+        const localCatalogsRaw = localStorage.getItem("greenlens_catalogs");
+        const localCatalogs = localCatalogsRaw ? JSON.parse(localCatalogsRaw) : [];
+        const existingCat = localCatalogs.find((c: any) => c.id === generatedCatalogId);
+        
+        let simulatedCatalogUpdate = existingCat ? { ...existingCat } : {
+          id: generatedCatalogId,
+          region, city, townOrArrondissement: town, neighborhood: neighborhood || town,
+          envScore: 50,
+          observations: []
+        };
+        
+        simulatedCatalogUpdate.observations = [payload, ...(simulatedCatalogUpdate.observations || [])];
+        
+        setSuccessResponse({
+          observation: payload,
+          catalog: simulatedCatalogUpdate,
+          userStats: userStats,
+          offlineSaved: true
+        });
+        
+        onObservationAdded(payload, simulatedCatalogUpdate, userStats);
+      } catch (storageErr) {
+         console.error("Local storage also failed:", storageErr);
+         alert("Could not save offline observation.");
+      }
+      
       setIsAnalyzing(false);
       setStatusMessage("");
     }

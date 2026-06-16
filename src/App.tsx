@@ -74,8 +74,44 @@ export default function App() {
   const refreshPlatformData = async () => {
     setIsLoading(true);
     try {
+      // 1. Sync any offline pending observations first
+      let pendingObs: any[] = [];
+      try {
+        const cachedPending = localStorage.getItem("greenlens_pending_observations");
+        if (cachedPending) pendingObs = JSON.parse(cachedPending);
+      } catch(e) {}
+
+      if (pendingObs.length > 0 && navigator.onLine) {
+        const remainingPending = [];
+        for (const obs of pendingObs) {
+          try {
+            const syncRes = await fetch("/api/observations", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                catalogId: obs.catalogId,
+                region: obs.region,
+                city: obs.city,
+                townOrArrondissement: obs.townOrArrondissement,
+                neighborhood: obs.neighborhood,
+                description: obs.description,
+                photoUrl: obs.photoUrl,
+                reporterName: obs.reporterName,
+                reporterEmail: obs.reporterEmail,
+                pollutionTag: obs.aiClassification?.sentiment || "Offline Report"
+              })
+            });
+            if (!syncRes.ok) throw new Error("Sync failed");
+          } catch(err) {
+            remainingPending.push(obs);
+          }
+        }
+        pendingObs = remainingPending;
+        localStorage.setItem("greenlens_pending_observations", JSON.stringify(pendingObs));
+      }
+
       const catalogsRes = await fetch("/api/catalogs");
-      const catalogsData = await catalogsRes.json();
+      let catalogsData = await catalogsRes.json();
       
       const orgsRes = await fetch("/api/organizations");
       const orgsData = await orgsRes.json();
@@ -99,6 +135,28 @@ export default function App() {
       const userData = await userRes.json();
 
       if (catalogsRes.ok && orgsRes.ok && userRes.ok) {
+        // Merge remaining pending locally into catalogs
+        if (pendingObs.length > 0) {
+          pendingObs.forEach((pending) => {
+             let matchingCat = catalogsData.find((c: any) => c.id === pending.catalogId);
+             if (!matchingCat) {
+               matchingCat = {
+                 id: pending.catalogId,
+                 region: pending.region,
+                 city: pending.city,
+                 townOrArrondissement: pending.townOrArrondissement,
+                 neighborhood: pending.neighborhood,
+                 envScore: 50,
+                 observations: []
+               };
+               catalogsData.push(matchingCat);
+             }
+             if (!matchingCat.observations.some((o: any) => o.id === pending.id)) {
+                matchingCat.observations.unshift(pending);
+             }
+          });
+        }
+        
         setCatalogs(catalogsData);
         setOrganizations(orgsData);
         setUserStats(userData);

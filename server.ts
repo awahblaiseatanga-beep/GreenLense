@@ -740,6 +740,14 @@ async function startServer() {
 
   app.use(express.json({ limit: "20mb" }));
 
+  // Fix Netlify function paths by stripping the prefix directly inside Express
+  app.use((req, res, next) => {
+    if (req.url.startsWith('/.netlify/functions/api')) {
+      req.url = req.url.replace('/.netlify/functions/api', '/api');
+    }
+    next();
+  });
+
   // API 1: Fetch all catalogs
   app.get("/api/catalogs", async (req, res) => {
     try {
