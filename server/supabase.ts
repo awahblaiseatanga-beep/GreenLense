@@ -62,33 +62,55 @@ export function handleSupabaseError(context: string, err: any): void {
 
 export function mapCatalogToClient(row: any, observations: any[] = [], campaigns: any[] = []): any {
   if (!row) return null;
+  const mappedObservations = (observations || []).map((o: any) => mapObservationToClient(o)).filter(Boolean);
+  const obsCount = mappedObservations.length;
+  
   return {
     id: row.id,
     region: row.region,
     city: row.city,
     townOrArrondissement: row.town_or_arrondissement,
     neighborhood: row.neighborhood,
-    envScore: row.env_score,
-    dirtinessScore: row.dirtiness_score === -1 ? "Insufficient Data" : row.dirtiness_score,
-    dirtinessTrend: row.dirtiness_trend,
+    envScore: obsCount < 5 ? null : row.env_score,
+    dirtinessScore: obsCount < 5 || row.dirtiness_score === -1 ? "Insufficient Data" : row.dirtiness_score,
+    dirtinessTrend: obsCount < 5 ? "Insufficient Data" : row.dirtiness_trend,
     activeCampaignsCount: row.active_campaigns_count,
     lastUpdated: row.last_updated ? new Date(row.last_updated).toLocaleDateString() : "N/A",
+    observationCount: obsCount,
+    minimumRequiredObservations: 5,
+    status: obsCount < 5 ? "Data Collection Mode" : "Active",
+    isActive: obsCount >= 5,
+    activationDate: obsCount >= 5 ? new Date(row.last_updated || new Date()).toLocaleDateString() : undefined,
     coordinates: {
       lat: row.coordinates_lat,
       lon: row.coordinates_lon,
     },
-    trends: [], // Loaded from catalog_trends if necessary or calculated
-    observations: (observations || []).map((o: any) => mapObservationToClient(o)).filter(Boolean),
+    trends: [],
+    observations: mappedObservations,
     campaigns: (campaigns || []).map((c: any) => mapCampaignToClient(c)).filter(Boolean),
   };
 }
 
 export function mapObservationToClient(row: any): any {
   if (!row) return null;
+  
+  let photoUrl = row.photo_url;
+  let photoUrls: string[] = [row.photo_url];
+  if (row.photo_url && row.photo_url.startsWith('["')) {
+    try {
+      const parsed = JSON.parse(row.photo_url);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        photoUrls = parsed;
+        photoUrl = parsed[0];
+      }
+    } catch(e) {}
+  }
+
   return {
     id: row.id,
     catalogId: row.catalog_id,
-    photoUrl: row.photo_url,
+    photoUrl: photoUrl,
+    photoUrls: photoUrls,
     description: row.description,
     reporterName: row.reporter_name,
     timestamp: row.timestamp,
@@ -289,10 +311,14 @@ export async function insertLiveObservation(obs: any): Promise<any | null> {
   if (!supabase) return null;
 
   try {
+    let serializedPhotoUrl = obs.photoUrl;
+    if (obs.photoUrls && obs.photoUrls.length > 0) {
+      serializedPhotoUrl = JSON.stringify(obs.photoUrls);
+    }
     const dbRow = {
       id: obs.id,
       catalog_id: obs.catalogId,
-      photo_url: obs.photoUrl,
+      photo_url: serializedPhotoUrl,
       description: obs.description,
       reporter_name: obs.reporterName,
       pollution_tag: obs.pollutionTag || "Moderately Polluted",

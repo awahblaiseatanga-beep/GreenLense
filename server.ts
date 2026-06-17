@@ -77,10 +77,24 @@ const TAG_WEIGHTS: Record<string, number> = {
 function calculateDirtyScoreAndTrend(catalog: any) {
   const obsList = catalog.observations || [];
   
+  // Track system validation rules natively
+  catalog.observationCount = obsList.length;
+  catalog.minimumRequiredObservations = 5;
+  
   if (obsList.length < 5) {
     catalog.dirtinessScore = "Insufficient Data";
     catalog.dirtinessTrend = "Insufficient Data";
+    catalog.status = "Data Collection Mode";
+    catalog.isActive = false;
+    catalog.envScore = null;
     return;
+  }
+
+  // Set to active if passed
+  catalog.status = "Active";
+  catalog.isActive = true;
+  if (!catalog.activationDate) {
+    catalog.activationDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric"});
   }
 
   // Assign Numerical Values & Recency Factor
@@ -175,6 +189,11 @@ let catalogs: any[] = [
     coordinates: { lat: 3.8667, lon: 11.5167 },
     lastUpdated: new Date().toLocaleDateString(),
     activeCampaignsCount: 3,
+    observationCount: 6,
+    minimumRequiredObservations: 5,
+    status: "Active",
+    activationDate: "2026-06-01",
+    isActive: true,
     trends: [
       { date: "May 1", score: 60 },
       { date: "May 15", score: 64 },
@@ -433,10 +452,14 @@ let catalogs: any[] = [
     city: "Bamenda",
     townOrArrondissement: "Bamenda II",
     neighborhood: "Nkwen",
-    envScore: 81,
+    envScore: null,
     coordinates: { lat: 5.9667, lon: 10.1500 },
     lastUpdated: new Date().toLocaleDateString(),
     activeCampaignsCount: 2,
+    observationCount: 4,
+    minimumRequiredObservations: 5,
+    status: "Data Collection Mode",
+    isActive: false,
     trends: [
       { date: "May 1", score: 78 },
       { date: "May 15", score: 79 },
@@ -784,13 +807,15 @@ async function startServer() {
       city,
       townOrArrondissement,
       neighborhood,
-      envScore: 50, // default starter environmental status score
+      envScore: null,
       coordinates: { lat: parseFloat(lat.toFixed(4)), lon: parseFloat(lon.toFixed(4)) },
       lastUpdated: new Date().toLocaleDateString(),
       activeCampaignsCount: 0,
-      trends: [
-        { date: "Current", score: 50 }
-      ],
+      observationCount: 0,
+      minimumRequiredObservations: 5,
+      status: "Data Collection Mode",
+      isActive: false,
+      trends: [],
       observations: [],
       campaigns: []
     };
@@ -837,7 +862,7 @@ async function startServer() {
 
   // API 4: Add user observation with deterministic scoring engine recalculations
   app.post("/api/observations", async (req, res) => {
-    const { catalogId, region, city, townOrArrondissement, neighborhood, description, photoUrl, reporterName, reporterEmail, pollutionTag } = req.body;
+    const { catalogId, region, city, townOrArrondissement, neighborhood, description, photoUrl, photoUrls, reporterName, reporterEmail, pollutionTag } = req.body;
 
     if (!description) {
       return res.status(400).json({ error: "Observation description is required." });
@@ -1028,6 +1053,7 @@ async function startServer() {
       id: `obs_${Date.now()}`,
       catalogId: targetCatalog.id,
       photoUrl: finalPhotoUrl,
+      photoUrls: photoUrls || [finalPhotoUrl],
       description,
       reporterName: reporterName || userStats.fullName,
       timestamp: new Date().toISOString(),
@@ -1943,7 +1969,7 @@ export { appPromise };
 
 if (process.env.NODE_ENV !== "test" && typeof require !== 'undefined' && require.main === module || process.argv[1].endsWith('server.ts') || process.argv[1].endsWith('server.cjs')) {
   appPromise.then(app => {
-    const PORT = process.env.PORT || 3000;
+    const PORT = Number(process.env.PORT) || 3000;
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`GreenLens Express Server running on port ${PORT}`);
     });

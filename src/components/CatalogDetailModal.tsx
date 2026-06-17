@@ -109,16 +109,36 @@ export default function CatalogDetailModal({ catalog, onClose, onCompleteCampaig
           {/* Section 1: At-a-Glance Overview Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4" id="modal-metrics-grid">
             
-            {/* Environmental Score Progress Dial */}
+            {/* Environmental Score Progress Dial OR Validation Progress */}
             <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex gap-3.5 items-center">
-              <div className="h-14 w-14 rounded-full border-4 border-dotted border-emerald-500 bg-emerald-50 text-emerald-800 flex flex-col items-center justify-center font-mono shrink-0">
-                <span className="text-base font-black">{catalog.envScore}</span>
-                <span className="text-[8px] font-bold text-emerald-600 leading-none">SCORE</span>
-              </div>
-              <div className="space-y-0.5">
-                <span className="text-xs font-black text-gray-900 block leading-tight">Catalogs Index</span>
-                <p className="text-[9px] text-gray-400">Sanitary baseline rating.</p>
-              </div>
+              {catalog.status === "Data Collection Mode" || catalog.envScore === null ? (
+                <>
+                  <div className="flex-1 w-full flex flex-col justify-center">
+                    <div className="flex justify-between items-end mb-1">
+                      <span className="text-xs font-black text-gray-900 leading-tight">Validation</span>
+                      <span className="text-[10px] font-mono text-emerald-600 font-bold">{catalog.observationCount} / {catalog.minimumRequiredObservations || 5}</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-emerald-500 transition-all duration-1000" 
+                        style={{ width: `${Math.round(((catalog.observationCount || 0) / (catalog.minimumRequiredObservations || 5)) * 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-[8.5px] text-gray-400 mt-1 leading-tight tracking-tight uppercase">Data Collection Mode</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="h-14 w-14 rounded-full border-4 border-dotted border-emerald-500 bg-emerald-50 text-emerald-800 flex flex-col items-center justify-center font-mono shrink-0">
+                    <span className="text-base font-black">{catalog.envScore}</span>
+                    <span className="text-[8px] font-bold text-emerald-600 leading-none">SCORE</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-gray-900 block leading-tight">Catalogs Index</span>
+                    <p className="text-[9px] text-gray-400">Sanitary baseline rating.</p>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Environmental Dirtiness Score (Deterministic scoring 0-100) */}
@@ -314,8 +334,23 @@ export default function CatalogDetailModal({ catalog, onClose, onCompleteCampaig
                   <div key={obs.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col md:flex-row shadow-2xs">
                     
                     {/* Obs Side Photo */}
-                    <div className="md:w-1/3 aspect-[4/3] md:aspect-auto bg-gray-100 relative">
-                      <img src={obs.photoUrl} alt="Obseration visual evidence" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <div className="md:w-1/3 aspect-[4/3] md:aspect-auto bg-gray-100 flex overflow-x-auto snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                      {obs.photoUrls && obs.photoUrls.length > 0 ? (
+                        obs.photoUrls.map((url, i) => (
+                          <div key={i} className="flex-none w-full h-full relative snap-center">
+                            <img src={url} alt={`Observation visual evidence ${i + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            {obs.photoUrls!.length > 1 && (
+                              <div className="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm z-10 font-mono">
+                                {i + 1} / {obs.photoUrls!.length}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="w-full h-full relative">
+                          <img src={obs.photoUrl} alt="Observation visual evidence" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                      )}
                     </div>
 
                     {/* Obs Metadata and classifications */}

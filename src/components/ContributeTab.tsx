@@ -129,8 +129,9 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
   const [neighborhood, setNeighborhood] = useState("Melen");
   
   const [description, setDescription] = useState("");
-  const [photoUrl, setPhotoUrl] = useState("");
-  const [imageName, setImageName] = useState("");
+  const [uploadedPhotos, setUploadedPhotos] = useState<{url: string, name: string}[]>([]);
+  const photoUrl = uploadedPhotos[0]?.url || "";
+  const imageName = uploadedPhotos[0]?.name || "";
   const [urlInput, setUrlInput] = useState("");
   const [pollutionTag, setPollutionTag] = useState<"Clean" | "Slightly Polluted" | "Moderately Polluted" | "Highly Polluted" | "Extremely Polluted">("Moderately Polluted");
   const [impactArea, setImpactArea] = useState<string>("Local Ward (Radius < 250m)");
@@ -179,67 +180,74 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
 
   // Handle manual visual input upload
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageName(file.name);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
       setIsAnalyzing(true);
       setStatusMessage("Encoding high-res photo bytes...");
       
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 1000;
-          const MAX_HEIGHT = 1000;
-          let width = img.width;
-          let height = img.height;
+      let processedCount = 0;
+      const newPhotos: {url: string, name: string}[] = [];
 
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height = Math.round(height * (MAX_WIDTH / width));
-              width = MAX_WIDTH;
+      files.forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const MAX_WIDTH = 1000;
+            const MAX_HEIGHT = 1000;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > MAX_WIDTH) {
+                height = Math.round(height * (MAX_WIDTH / width));
+                width = MAX_WIDTH;
+              }
+            } else {
+              if (height > MAX_HEIGHT) {
+                width = Math.round(width * (MAX_HEIGHT / height));
+                height = MAX_HEIGHT;
+              }
             }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width = Math.round(width * (MAX_HEIGHT / height));
-              height = MAX_HEIGHT;
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              // Compress heavily for Netlify serverless limit
+              const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+              newPhotos.push({ url: dataUrl, name: file.name });
+            } else {
+              // Fallback
+              newPhotos.push({ url: event.target?.result as string, name: file.name });
             }
-          }
 
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            // Compress heavily for Netlify serverless limit
-            const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-            setPhotoUrl(dataUrl);
-          } else {
-            // Fallback
-            setPhotoUrl(event.target?.result as string);
-          }
-
-          // Simulate immediate frontend loading effect for AI processing
-          setTimeout(() => {
-            setStatusMessage("Contacting GreenLens AI server...");
-            setTimeout(() => {
-              setIsAnalyzing(false);
-              setStatusMessage("");
-            }, 500);
-          }, 500);
+            processedCount++;
+            if (processedCount === files.length) {
+              setUploadedPhotos(prev => [...prev, ...newPhotos]);
+              // Simulate immediate frontend loading effect for AI processing
+              setTimeout(() => {
+                setStatusMessage("Contacting GreenLens AI server...");
+                setTimeout(() => {
+                  setIsAnalyzing(false);
+                  setStatusMessage("");
+                }, 500);
+              }, 500);
+            }
+          };
+          img.src = event.target?.result as string;
         };
-        img.src = event.target?.result as string;
-      };
-      reader.readAsDataURL(file);
+        reader.readAsDataURL(file);
+      });
     }
   };
 
   // Direct custom URL input submission helper
   const handleApplyUrl = () => {
     if (urlInput.trim()) {
-      setPhotoUrl(urlInput.trim());
-      setImageName("imported_external_evidence.png");
+      setUploadedPhotos(prev => [...prev, { url: urlInput.trim(), name: "imported_external_evidence.png" }]);
     }
   };
 
@@ -250,8 +258,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
 
   // Preset photo selector helper
   const selectPresetPhoto = (preset: typeof PRESET_PHOTOS[0]) => {
-    setPhotoUrl(preset.url);
-    setImageName(preset.title);
+    setUploadedPhotos([{ url: preset.url, name: preset.title }]);
     if (!description) {
       setDescription(preset.description);
     }
@@ -286,6 +293,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
           neighborhood: neighborhood || town,
           description,
           photoUrl: photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80",
+          photoUrls: uploadedPhotos.length > 0 ? uploadedPhotos.map(p => p.url) : [photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80"],
           reporterName: userStats?.fullName || "Eco Scout",
           reporterEmail: userStats?.email || "user@example.com",
           pollutionTag
@@ -325,6 +333,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
         neighborhood: neighborhood || town,
         description,
         photoUrl: photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80",
+        photoUrls: uploadedPhotos.length > 0 ? uploadedPhotos.map(p => p.url) : [photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80"],
         reporterName: userStats?.fullName || "Eco Scout",
         reporterEmail: userStats?.email || "user@example.com",
         timestamp: new Date().toISOString(),
@@ -376,8 +385,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
   const startNewReport = () => {
     setSuccessResponse(null);
     setDescription("");
-    setPhotoUrl("");
-    setImageName("");
+    setUploadedPhotos([]);
     setUrlInput("");
     setPollutionTag("Moderately Polluted");
     setImpactArea("Local Ward (Radius < 250m)");
@@ -396,9 +404,25 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
             
             <div className="space-y-2">
               <h3 className="text-lg font-extrabold text-gray-950">Observation Filed Successfully!</h3>
-              <p className="text-xs text-gray-500 max-w-md mx-auto leading-relaxed">
-                Your report from <span className="font-bold text-primary">{neighborhood}, {city}</span> has been compiled and is active. The community threat rating indexes have been automatically reweighted.
-              </p>
+              {(successResponse.catalog?.observationCount || 1) < 5 ? (
+                <div className="text-xs font-bold max-w-md mx-auto leading-relaxed bg-emerald-50 border border-emerald-100 text-emerald-800 p-3 rounded-lg flex flex-col items-center gap-1.5">
+                  <span>You helped complete this area&apos;s environmental profile.</span>
+                  <span className="text-[10px] text-emerald-600 font-mono">Validation Progress: {successResponse.catalog?.observationCount || 1} / 5</span>
+                </div>
+              ) : (successResponse.catalog?.observationCount === 5) ? (
+                <div className="text-xs font-bold max-w-md mx-auto leading-relaxed bg-indigo-50 border border-indigo-200 text-indigo-800 p-3 rounded-xl flex flex-col items-center gap-2 shadow-xs">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                    <span className="text-sm font-black uppercase text-indigo-900">Pioneer Badge!</span>
+                  </div>
+                  <span>You provided the 5th observation!</span>
+                  <span className="text-[10px] font-normal leading-tight text-center">This area was just officially activated and its first Environmental Score has been generated. Awesome work!</span>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 max-w-md mx-auto leading-relaxed">
+                  Your report from <span className="font-bold text-primary">{neighborhood}, {city}</span> has been compiled and is active. The community threat rating indexes have been automatically reweighted.
+                </p>
+              )}
             </div>
 
             <div className="bg-emerald-50/70 p-4 rounded-2xl max-w-sm mx-auto border border-emerald-100/60 text-left text-xs font-semibold space-y-2.5" id="xp-reward-card">
@@ -407,8 +431,8 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
                 <span className="bg-emerald-600 text-white rounded text-[9px] px-1.5 py-0.5 uppercase tracking-tight">Status: Sync Safe</span>
               </div>
               <div className="flex justify-between text-gray-600">
-                <span>Direct Intelligence Contribution</span>
-                <span className="font-extrabold text-emerald-700 font-mono">+30 XP Given</span>
+                <span>Environmental Impact Points</span>
+                <span className="font-extrabold text-emerald-700 font-mono">+30 XP</span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>Revised User Level</span>
@@ -501,21 +525,31 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
                     ref={fileInputRef}
                     onChange={handleImageUpload}
                     accept="image/*"
+                    multiple
                     className="hidden"
                   />
-                  {photoUrl && activeTab === "upload" ? (
+                  {uploadedPhotos.length > 0 && activeTab === "upload" ? (
                     <div className="space-y-3">
-                      <img src={photoUrl} alt="Visual submission preview" className="h-20 w-32 mx-auto object-cover rounded-lg border border-gray-200" referrerPolicy="no-referrer" />
-                      <div className="text-[11px] text-gray-500 font-mono">{imageName || "custom_image.png"}</div>
-                      <span className="text-[11px] text-primary font-bold hover:underline">Change local file</span>
+                      <div className="flex flex-wrap gap-2 justify-center">
+                        {uploadedPhotos.map((photo, index) => (
+                          <div key={index} className="relative group">
+                            <img src={photo.url} alt={`Visual submission preview ${index + 1}`} className="h-20 w-auto max-w-[120px] object-cover rounded-lg border border-gray-200" referrerPolicy="no-referrer" />
+                            {index === 0 && (
+                              <span className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">Primary</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-[11px] text-gray-500 font-mono">{uploadedPhotos.length} file{uploadedPhotos.length > 1 ? 's' : ''} added</div>
+                      <span className="text-[11px] text-primary font-bold hover:underline" onClick={(e) => { e.stopPropagation(); triggerFileSelector(); }}>Add more or replace</span>
                     </div>
                   ) : (
                     <>
                       <div className="w-10 h-10 bg-gray-200 dark:bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
                         <Upload className="w-5 h-5 text-gray-600" />
                       </div>
-                      <h3 className="text-xs font-bold text-gray-800 mb-1">Upload Environmental Image</h3>
-                      <p className="text-[10px] text-gray-500">Supports JPG, PNG formats up to 10MB sizes</p>
+                      <h3 className="text-xs font-bold text-gray-800 mb-1">Upload Environmental Images</h3>
+                      <p className="text-[10px] text-gray-500">Supports multiple JPG, PNG formats up to 10MB sizes</p>
                     </>
                   )}
                 </div>

@@ -79,7 +79,7 @@ export default function DynamicIsland({
   const dockItems: DockItemData[] = tabs.map((tab) => {
     const IconComponent = tab.icon;
     return {
-      Icon: <IconComponent className="h-[18px] w-[18px]" />,
+      Icon: <IconComponent className="h-[22px] w-[22px]" />,
       onClick: () => {
         setActiveTab(tab.id);
         setIsExpanded(false);
@@ -100,27 +100,27 @@ export default function DynamicIsland({
   const getIslandDimensions = () => {
     if (activeNotification) {
       return {
-        width: "min(480px, 94vw)",
-        height: "64px",
-        borderRadius: "32px",
+        width: "min(520px, 94vw)",
+        height: "72px",
+        borderRadius: "36px",
         background: "rgba(6, 78, 59, 0.98)",
         border: "1px solid rgba(16, 185, 129, 0.45)"
       };
     }
     if (isExpanded) {
       return {
-        width: "min(330px, 94vw)",
-        height: "54px",
-        borderRadius: "27px",
+        width: "min(420px, 94vw)",
+        height: "72px",
+        borderRadius: "36px",
         background: "rgba(10, 12, 11, 0.98)",
         border: "1px solid rgba(255, 255, 255, 0.12)"
       };
     }
     // Compact Sizing
     return {
-      width: "165px",
-      height: "44px",
-      borderRadius: "22px",
+      width: "220px",
+      height: "56px",
+      borderRadius: "28px",
       background: "rgba(10, 12, 11, 0.98)",
       border: "1px solid rgba(255, 255, 255, 0.08)"
     };
@@ -168,16 +168,16 @@ export default function DynamicIsland({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.92, y: -10 }}
               transition={{ duration: 0.16 }}
-              className="w-full h-full flex items-center justify-between px-5 text-white"
+              className="w-full h-full flex items-center justify-between px-6 text-white"
               id="island-alert-container"
             >
-              <div className="flex items-center gap-3 truncate pr-2">
-                <div className="h-8 w-8 bg-emerald-400/20 border border-emerald-400/30 rounded-full flex items-center justify-center text-[#90d689] shrink-0">
-                  <CheckCircle className="h-4.5 w-4.5 animate-bounce" />
+              <div className="flex items-center gap-4 truncate pr-2">
+                <div className="h-10 w-10 bg-emerald-400/20 border border-emerald-400/30 rounded-full flex items-center justify-center text-[#90d689] shrink-0">
+                  <CheckCircle className="h-5 w-5 animate-bounce" />
                 </div>
                 <div className="flex flex-col truncate">
-                  <span className="text-[9px] font-mono font-black uppercase tracking-widest text-[#90d689]">Eco Status Updated</span>
-                  <span className="text-[11px] font-bold text-white leading-tight truncate">
+                  <span className="text-[10px] font-mono font-black uppercase tracking-widest text-[#90d689]">Eco Status Updated</span>
+                  <span className="text-sm font-bold text-white leading-tight truncate">
                     {activeNotification}
                   </span>
                 </div>
@@ -188,7 +188,7 @@ export default function DynamicIsland({
                   setActiveNotification(null);
                   onClearFlashMessage();
                 }}
-                className="text-[10px] font-black font-mono text-[#90d689] hover:text-white bg-white/10 px-2.5 py-1 rounded-full transition-all shrink-0 cursor-pointer"
+                className="text-xs font-black font-mono text-[#90d689] hover:text-white bg-white/10 px-3 py-1.5 rounded-full transition-all shrink-0 cursor-pointer"
                 id="island-alert-dismiss"
               >
                 OK
@@ -202,20 +202,20 @@ export default function DynamicIsland({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.1 }}
-              className="w-full h-full flex items-center justify-between px-4.5 text-white select-none"
+              className="w-full h-full flex items-center justify-between px-5 text-white select-none"
               id="compact-island-content"
             >
               <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" />
-                <ActiveIcon className="h-4 w-4 text-[#90d689] shrink-0" />
-                <span className="text-[11px] font-black tracking-wider uppercase">
+                <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" />
+                <ActiveIcon className="h-5 w-5 text-[#90d689] shrink-0" />
+                <span className="text-xs font-black tracking-wider uppercase">
                   {currentTabObj.label}
                 </span>
               </div>
               
-              <div className="flex items-center gap-1.5 text-gray-400 text-[10px] font-bold">
+              <div className="flex items-center gap-1.5 text-gray-400 text-[11px] font-bold">
                 <span>Menu</span>
-                <ChevronUp className="h-3.5 w-3.5 text-gray-500 animate-bounce" />
+                <ChevronUp className="h-4 w-4 text-gray-500 animate-bounce" />
               </div>
             </motion.div>
           ) : (

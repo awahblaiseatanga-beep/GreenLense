@@ -27,7 +27,8 @@ export interface AIClassification {
 export interface Observation {
   id: string;
   catalogId: string;
-  photoUrl: string;
+  photoUrl: string; // Keep for backward compatibility
+  photoUrls?: string[]; // Allow multiple images
   description: string;
   reporterName: string;
   timestamp: string;
@@ -70,7 +71,7 @@ export interface EnvironmentalCatalog {
   city: string;
   townOrArrondissement: string;
   neighborhood: string;
-  envScore: number; // 0-100
+  envScore: number | null; // 0-100, null if not enough observations
   dirtinessScore?: number | "Insufficient Data";
   dirtinessTrend?: "Improving" | "Getting Worse" | "Stable" | "Insufficient Data";
   coordinates: {
@@ -85,6 +86,13 @@ export interface EnvironmentalCatalog {
     date: string;
     score: number;
   }[];
+  // Validation System Fields
+  observationCount: number;
+  minimumRequiredObservations: number;
+  status: "Data Collection Mode" | "Active";
+  activationDate?: string;
+  firstScoreDate?: string;
+  isActive: boolean;
 }
 
 export interface Organization {

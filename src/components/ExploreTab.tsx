@@ -21,11 +21,14 @@ export default function ExploreTab({ catalogs, onSelectCatalog, onNavigateToInsi
 
   // Calculations for Environmental Health Index & Hotspots
   const regionCatalogs = catalogs.filter(c => selectedRegion === "All" || c.region === selectedRegion);
-  const avgScore = regionCatalogs.length > 0 
-    ? Math.round(regionCatalogs.reduce((acc, curr) => acc + curr.envScore, 0) / regionCatalogs.length)
+  const activeCatalogs = regionCatalogs.filter(c => c.isActive !== false && c.envScore !== null);
+  const emergingCatalogs = regionCatalogs.filter(c => c.isActive === false || c.envScore === null);
+
+  const avgScore = activeCatalogs.length > 0 
+    ? Math.round(activeCatalogs.reduce((acc, curr) => acc + (curr.envScore || 0), 0) / activeCatalogs.length)
     : 0;
   
-  const criticalCount = regionCatalogs.filter(c => c.envScore < 50).length;
+  const criticalCount = activeCatalogs.filter(c => (c.envScore || 0) < 50).length;
   const activeCampaigns = regionCatalogs.reduce((acc, curr) => acc + (curr.activeCampaignsCount || 0), 0);
   const totalObservations = regionCatalogs.reduce((acc, curr) => acc + (curr.observations?.length || 0), 0);
 
@@ -218,12 +221,12 @@ export default function ExploreTab({ catalogs, onSelectCatalog, onNavigateToInsi
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" id="active-hotspot-summaries">
-                    {regionCatalogs.filter(c => c.envScore < 70).map(hc => (
+                    {activeCatalogs.filter(c => (c.envScore || 0) < 70).map(hc => (
                       <div 
                         key={hc.id}
                         onClick={() => onSelectCatalog(hc)}
                         className={`p-3 rounded-lg border transition-all cursor-pointer flex justify-between items-start ${
-                          hc.envScore < 50 
+                          (hc.envScore || 0) < 50 
                             ? "bg-red-50/40 border-red-200 hover:bg-red-50/70" 
                             : "bg-amber-50/40 border-amber-200 hover:bg-amber-50/70"
                         }`}
@@ -233,9 +236,9 @@ export default function ExploreTab({ catalogs, onSelectCatalog, onNavigateToInsi
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-xs font-bold text-gray-900 leading-none">{hc.neighborhood}</span>
                             <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded text-white leading-none ${
-                              hc.envScore < 50 ? "bg-red-700" : "bg-amber-600"
+                              (hc.envScore || 0) < 50 ? "bg-red-700" : "bg-amber-600"
                             }`}>
-                              {hc.envScore < 50 ? "CRITICAL" : "RISK"}
+                              {(hc.envScore || 0) < 50 ? "CRITICAL" : "RISK"}
                             </span>
                           </div>
                           <p className="text-[10px] text-gray-400 leading-tight">
@@ -251,6 +254,61 @@ export default function ExploreTab({ catalogs, onSelectCatalog, onNavigateToInsi
                   </div>
                 )}
               </div>
+
+              {/* Emerging Areas Validation System */}
+              {emergingCatalogs.length > 0 && (
+                <div className="pt-2">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-4 w-4 bg-gray-100 rounded flex items-center justify-center shrink-0">
+                      <div className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" />
+                    </div>
+                    <span className="text-xs font-bold text-gray-900 uppercase tracking-widest font-mono">Emerging Areas</span>
+                    <div className="h-px bg-gray-200 flex-1 ml-2"></div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-2.5">
+                    {emergingCatalogs.map(em => (
+                      <div 
+                        key={em.id} 
+                        className="bg-white border-2 border-dashed border-gray-200 rounded-xl p-3.5 hover:border-emerald-300 transition-colors cursor-pointer"
+                        onClick={() => onSelectCatalog(em)}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <span className="text-xs font-bold text-gray-900 bg-gray-100 px-1.5 py-0.5 rounded leading-none">
+                              {em.neighborhood}
+                            </span>
+                            <span className="text-[10px] text-gray-500 block mt-1 ml-0.5">{em.city}</span>
+                          </div>
+                          <span className="text-[9px] font-mono font-black text-gray-400 uppercase tracking-wider bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full">
+                            Data Collection
+                          </span>
+                        </div>
+                        
+                        <div className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
+                          <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-[10px] font-bold text-gray-600">
+                              {em.observationCount} / {em.minimumRequiredObservations || 5} Observations
+                            </span>
+                            <span className="text-[10px] font-mono font-black text-emerald-600">
+                              {Math.round(((em.observationCount || 0) / (em.minimumRequiredObservations || 5)) * 100)}%
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-emerald-500 transition-all duration-1000" 
+                              style={{ width: `${Math.round(((em.observationCount || 0) / (em.minimumRequiredObservations || 5)) * 100)}%` }}
+                            />
+                          </div>
+                          <p className="text-[9.5px] text-gray-500 mt-2 italic leading-tight">
+                            Help complete this area&apos;s environmental profile to generate an official score.
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
