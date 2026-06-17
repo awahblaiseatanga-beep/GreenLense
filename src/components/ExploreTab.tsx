@@ -255,14 +255,14 @@ export default function ExploreTab({ catalogs, onSelectCatalog, onNavigateToInsi
                 )}
               </div>
 
-              {/* Emerging Areas Validation System */}
+              {/* Areas Needing Verification */}
               {emergingCatalogs.length > 0 && (
                 <div className="pt-2">
                   <div className="flex items-center gap-2 mb-3">
-                    <div className="h-4 w-4 bg-gray-100 rounded flex items-center justify-center shrink-0">
-                      <div className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" />
+                    <div className="h-4 w-4 bg-amber-100 rounded flex items-center justify-center shrink-0">
+                      <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                     </div>
-                    <span className="text-xs font-bold text-gray-900 uppercase tracking-widest font-mono">Emerging Areas</span>
+                    <span className="text-xs font-bold text-gray-900 uppercase tracking-widest font-mono">Areas Needing Verification</span>
                     <div className="h-px bg-gray-200 flex-1 ml-2"></div>
                   </div>
                   
@@ -270,39 +270,53 @@ export default function ExploreTab({ catalogs, onSelectCatalog, onNavigateToInsi
                     {emergingCatalogs.map(em => (
                       <div 
                         key={em.id} 
-                        className="bg-white border-2 border-dashed border-gray-200 rounded-xl p-3.5 hover:border-emerald-300 transition-colors cursor-pointer"
+                        className="bg-white border-2 border-dashed border-amber-200/60 hover:border-amber-400 rounded-xl p-3.5 transition-colors cursor-pointer group shadow-xs hover:bg-amber-50/10"
                         onClick={() => onSelectCatalog(em)}
                       >
-                        <div className="flex justify-between items-start mb-2">
+                        <div className="flex justify-between items-start mb-2.5">
                           <div>
-                            <span className="text-xs font-bold text-gray-900 bg-gray-100 px-1.5 py-0.5 rounded leading-none">
+                            <span className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded leading-none">
                               {em.neighborhood}
                             </span>
                             <span className="text-[10px] text-gray-500 block mt-1 ml-0.5">{em.city}</span>
                           </div>
-                          <span className="text-[9px] font-mono font-black text-gray-400 uppercase tracking-wider bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full">
-                            Data Collection
+                          <span className="flex items-center gap-1 text-[9px] font-mono font-black text-amber-600 uppercase tracking-wider bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
+                            <AlertTriangle className="h-2.5 w-2.5" />
+                            Unverified Alert
                           </span>
                         </div>
                         
-                        <div className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
-                          <div className="flex justify-between items-center mb-1.5">
-                            <span className="text-[10px] font-bold text-gray-600">
-                              {em.observationCount} / {em.minimumRequiredObservations || 5} Observations
-                            </span>
-                            <span className="text-[10px] font-mono font-black text-emerald-600">
-                              {Math.round(((em.observationCount || 0) / (em.minimumRequiredObservations || 5)) * 100)}%
-                            </span>
+                        <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 mb-2.5">
+                          <div className="flex justify-between items-center mb-2">
+                             <div className="flex items-center gap-4">
+                                <div className="text-left">
+                                    <span className="block text-[8px] uppercase tracking-widest text-gray-400 font-mono">Observations</span>
+                                    <span className="text-xs font-black text-gray-800 font-mono">{em.observationCount} <span className="text-gray-400 text-[10px] font-medium">/ 5</span></span>
+                                </div>
+                                <div className="w-px h-6 bg-gray-200" />
+                                <div className="text-left">
+                                    <span className="block text-[8px] uppercase tracking-widest text-gray-400 font-mono">Contributors</span>
+                                    <span className="text-xs font-black text-gray-800 font-mono">{em.contributorCount || 0} <span className="text-gray-400 text-[10px] font-medium">/ 3</span></span>
+                                </div>
+                             </div>
+                             <div className="text-right">
+                                <span className="text-[11px] font-mono font-black text-amber-600">
+                                  {em.verificationProgress || 0}%
+                                </span>
+                             </div>
                           </div>
+                          
                           <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-emerald-500 transition-all duration-1000" 
-                              style={{ width: `${Math.round(((em.observationCount || 0) / (em.minimumRequiredObservations || 5)) * 100)}%` }}
-                            />
+                             <div 
+                               className="h-full bg-amber-500 transition-all duration-1000" 
+                               style={{ width: `${em.verificationProgress || 0}%` }} 
+                             />
                           </div>
-                          <p className="text-[9.5px] text-gray-500 mt-2 italic leading-tight">
-                            Help complete this area&apos;s environmental profile to generate an official score.
-                          </p>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-gray-400 font-mono">Created: {em.lastUpdated}</span>
+                            <button className="text-[10px] bg-amber-100 text-amber-800 hover:bg-amber-500 hover:text-white font-bold px-3 py-1.5 rounded-lg transition-colors border border-amber-200 font-mono uppercase tracking-tight group-hover:bg-amber-500 group-hover:text-white">Help Verify</button>
                         </div>
                       </div>
                     ))}

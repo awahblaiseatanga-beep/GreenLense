@@ -39,6 +39,7 @@ export interface Observation {
     lon: number;
   };
   facebookPostUrl?: string;
+  imageHash?: string;
 }
 
 export interface Verification {
@@ -88,8 +89,10 @@ export interface EnvironmentalCatalog {
   }[];
   // Validation System Fields
   observationCount: number;
+  contributorCount: number;
   minimumRequiredObservations: number;
-  status: "Data Collection Mode" | "Active";
+  status: "UNVERIFIED ALERT" | "VERIFIED CATALOG";
+  verificationProgress: number;
   activationDate?: string;
   firstScoreDate?: string;
   isActive: boolean;

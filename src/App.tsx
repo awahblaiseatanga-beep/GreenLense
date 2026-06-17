@@ -461,6 +461,7 @@ export default function App() {
                 onObservationAdded={handleObservationAdded}
                 catalogsCount={catalogs.length}
                 userStats={userStats}
+                catalogs={catalogs}
               />
             )}
             {activeTab === "impact" && (

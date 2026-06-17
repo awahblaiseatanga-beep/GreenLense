@@ -86,9 +86,14 @@ export default function CatalogDetailModal({ catalog, onClose, onCompleteCampaig
               <MapPin className="h-4 w-4" />
             </div>
             <div>
-              <h3 className="text-base font-black text-gray-950 leading-none">
-                {catalog.neighborhood} Environmental Catalog
-              </h3>
+              <div className="flex items-center gap-2">
+                 <h3 className="text-base font-black text-gray-950 leading-none">
+                   {catalog.neighborhood} Environmental Catalog
+                 </h3>
+                 <span className={`text-[9px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${catalog.status === "VERIFIED CATALOG" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                   {catalog.status}
+                 </span>
+              </div>
               <p className="text-[10px] text-gray-400 font-mono tracking-wider font-semibold uppercase mt-1">
                 {catalog.city}, {catalog.region} Region • ID: {catalog.id} • Updated: {catalog.lastUpdated || "N/A"}
               </p>
@@ -111,20 +116,24 @@ export default function CatalogDetailModal({ catalog, onClose, onCompleteCampaig
             
             {/* Environmental Score Progress Dial OR Validation Progress */}
             <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex gap-3.5 items-center">
-              {catalog.status === "Data Collection Mode" || catalog.envScore === null ? (
+              {catalog.status === "UNVERIFIED ALERT" || catalog.envScore === null ? (
                 <>
                   <div className="flex-1 w-full flex flex-col justify-center">
                     <div className="flex justify-between items-end mb-1">
-                      <span className="text-xs font-black text-gray-900 leading-tight">Validation</span>
-                      <span className="text-[10px] font-mono text-emerald-600 font-bold">{catalog.observationCount} / {catalog.minimumRequiredObservations || 5}</span>
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-amber-600 font-mono">Verification</span>
+                      <span className="text-[10px] font-mono text-amber-600 font-bold">{catalog.verificationProgress || 0}%</span>
                     </div>
-                    <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-emerald-500 transition-all duration-1000" 
-                        style={{ width: `${Math.round(((catalog.observationCount || 0) / (catalog.minimumRequiredObservations || 5)) * 100)}%` }}
-                      />
+                    <div className="h-2 w-full bg-amber-100 rounded-full overflow-hidden relative flex">
+                       <div className="h-full bg-emerald-400 opacity-60 absolute left-0 top-0 transition-all duration-1000" style={{ width: `${Math.min(100, Math.round(((catalog.observationCount || 0)/5)*100))}%`}} />
+                       <div 
+                         className="h-full bg-amber-500 z-10 relative transition-all duration-1000" 
+                         style={{ width: `${catalog.verificationProgress || 0}%` }} 
+                       />
                     </div>
-                    <p className="text-[8.5px] text-gray-400 mt-1 leading-tight tracking-tight uppercase">Data Collection Mode</p>
+                    <div className="flex justify-between items-center mt-1.5">
+                      <p className="text-[8.5px] text-gray-400 leading-tight tracking-tight uppercase">{catalog.observationCount} / 5 Obs</p>
+                      <p className="text-[8.5px] text-gray-400 leading-tight tracking-tight uppercase">{catalog.contributorCount || 0} / 3 Cntrb</p>
+                    </div>
                   </div>
                 </>
               ) : (

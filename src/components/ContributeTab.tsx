@@ -30,7 +30,35 @@ import {
   ArrowDownNarrowWide,
   FolderOpen
 } from "lucide-react";
-import { CameroonRegion } from "../types";
+import { EnvironmentalCatalog, CameroonRegion } from "../types";
+
+const computeImageHash = (img: HTMLImageElement): string => {
+  const c = document.createElement("canvas");
+  const cx = c.getContext("2d");
+  c.width = 8;
+  c.height = 8;
+  if (!cx) return "";
+  cx.drawImage(img, 0, 0, 8, 8);
+  const data = cx.getImageData(0, 0, 8, 8).data;
+  let sum = 0;
+  const grays = [];
+  for (let i = 0; i < data.length; i += 4) {
+    const g = (data[i] + data[i+1] + data[i+2]) / 3;
+    grays.push(g);
+    sum += g;
+  }
+  const avg = sum / 64;
+  return grays.map(g => g >= avg ? "1" : "0").join("");
+};
+
+const hammingDistance = (h1: string, h2: string) => {
+  if (!h1 || !h2 || h1.length !== 64 || h2.length !== 64) return 64;
+  let d = 0;
+  for (let i = 0; i < 64; i++) {
+    if (h1[i] !== h2[i]) d++;
+  }
+  return d;
+};
 
 // Static local context data matching our Cameroon administrative schema
 const REGION_OPTIONS: CameroonRegion[] = [
@@ -116,9 +144,10 @@ interface ContributeTabProps {
   onObservationAdded: (newObs: any, catalog: any, userStats: any) => void;
   catalogsCount: number;
   userStats: any;
+  catalogs: EnvironmentalCatalog[];
 }
 
-export default function ContributeTab({ onObservationAdded, catalogsCount, userStats }: ContributeTabProps) {
+export default function ContributeTab({ onObservationAdded, catalogsCount, userStats, catalogs }: ContributeTabProps) {
   // Navigation / Tab states
   const [activeTab, setActiveTab] = useState<"upload" | "presets" | "url">("upload");
 
@@ -186,6 +215,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
       setStatusMessage("Encoding high-res photo bytes...");
       
       let processedCount = 0;
+      let duplicatesSkipped = 0;
       const newPhotos: {url: string, name: string}[] = [];
 
       files.forEach((file) => {
@@ -193,6 +223,29 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
         reader.onload = (event) => {
           const img = new Image();
           img.onload = () => {
+            const hash = computeImageHash(img);
+            
+            // Check existing catalogs for duplicates
+            const existingCat = catalogs.find((c) => c.region === region && c.city === city && c.townOrArrondissement === town && (c.neighborhood === neighborhood || !neighborhood || c.neighborhood === town));
+            let isDuplicate = false;
+            
+            if (existingCat) {
+              const existingHashes = existingCat.observations?.map(o => o.imageHash).filter(Boolean) || [];
+              for (const exHash of existingHashes) {
+                 if (exHash && hammingDistance(hash, exHash) <= 6) { // 90% similarity threshold
+                   isDuplicate = true;
+                   break;
+                 }
+              }
+            }
+
+            if (isDuplicate) {
+              duplicatesSkipped++;
+              processedCount++;
+              if (processedCount === files.length) finalizeUpload(newPhotos, duplicatesSkipped);
+              return;
+            }
+
             const canvas = document.createElement("canvas");
             const MAX_WIDTH = 1000;
             const MAX_HEIGHT = 1000;
@@ -218,30 +271,36 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
               ctx.drawImage(img, 0, 0, width, height);
               // Compress heavily for Netlify serverless limit
               const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-              newPhotos.push({ url: dataUrl, name: file.name });
+              newPhotos.push({ url: dataUrl, name: file.name + "||" + hash });
             } else {
               // Fallback
-              newPhotos.push({ url: event.target?.result as string, name: file.name });
+              newPhotos.push({ url: event.target?.result as string, name: file.name + "||" + hash });
             }
 
             processedCount++;
-            if (processedCount === files.length) {
-              setUploadedPhotos(prev => [...prev, ...newPhotos]);
-              // Simulate immediate frontend loading effect for AI processing
-              setTimeout(() => {
-                setStatusMessage("Contacting GreenLens AI server...");
-                setTimeout(() => {
-                  setIsAnalyzing(false);
-                  setStatusMessage("");
-                }, 500);
-              }, 500);
-            }
+            if (processedCount === files.length) finalizeUpload(newPhotos, duplicatesSkipped);
           };
           img.src = event.target?.result as string;
         };
         reader.readAsDataURL(file);
       });
     }
+  };
+
+  const finalizeUpload = (newPhotos: any[], duplicatesSkipped: number) => {
+    if (duplicatesSkipped > 0) {
+      alert(`Duplicate Validation Error:\n\n${duplicatesSkipped} image(s) were too similar to existing evidence in this area. Please upload different perspectives to help the community verify.`);
+    }
+    if (newPhotos.length > 0) {
+      setUploadedPhotos(prev => [...prev, ...newPhotos]);
+    }
+    setTimeout(() => {
+      setStatusMessage("Contacting GreenLens AI server...");
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setStatusMessage("");
+      }, 500);
+    }, 500);
   };
 
   // Direct custom URL input submission helper
@@ -294,6 +353,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
           description,
           photoUrl: photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80",
           photoUrls: uploadedPhotos.length > 0 ? uploadedPhotos.map(p => p.url) : [photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80"],
+          imageHash: uploadedPhotos[0]?.name?.includes("||") ? uploadedPhotos[0].name.split("||")[1] : null,
           reporterName: userStats?.fullName || "Eco Scout",
           reporterEmail: userStats?.email || "user@example.com",
           pollutionTag
@@ -334,6 +394,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
         description,
         photoUrl: photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80",
         photoUrls: uploadedPhotos.length > 0 ? uploadedPhotos.map(p => p.url) : [photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80"],
+        imageHash: uploadedPhotos[0]?.name?.includes("||") ? uploadedPhotos[0].name.split("||")[1] : null,
         reporterName: userStats?.fullName || "Eco Scout",
         reporterEmail: userStats?.email || "user@example.com",
         timestamp: new Date().toISOString(),

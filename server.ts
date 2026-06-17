@@ -77,21 +77,29 @@ const TAG_WEIGHTS: Record<string, number> = {
 function calculateDirtyScoreAndTrend(catalog: any) {
   const obsList = catalog.observations || [];
   
+  // Unique Contributors Calculation
+  const uniqueContributors = new Set(obsList.map((o: any) => o.reporterName)).size;
+
   // Track system validation rules natively
   catalog.observationCount = obsList.length;
+  catalog.contributorCount = uniqueContributors;
   catalog.minimumRequiredObservations = 5;
   
-  if (obsList.length < 5) {
+  const obsProg = Math.min(1, catalog.observationCount / 5);
+  const contProg = Math.min(1, catalog.contributorCount / 3);
+  catalog.verificationProgress = Math.round(((obsProg + contProg) / 2) * 100);
+
+  if (catalog.observationCount < 5 || catalog.contributorCount < 3) {
     catalog.dirtinessScore = "Insufficient Data";
     catalog.dirtinessTrend = "Insufficient Data";
-    catalog.status = "Data Collection Mode";
+    catalog.status = "UNVERIFIED ALERT";
     catalog.isActive = false;
     catalog.envScore = null;
     return;
   }
 
   // Set to active if passed
-  catalog.status = "Active";
+  catalog.status = "VERIFIED CATALOG";
   catalog.isActive = true;
   if (!catalog.activationDate) {
     catalog.activationDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric"});
@@ -457,8 +465,10 @@ let catalogs: any[] = [
     lastUpdated: new Date().toLocaleDateString(),
     activeCampaignsCount: 2,
     observationCount: 4,
+    contributorCount: 2,
     minimumRequiredObservations: 5,
-    status: "Data Collection Mode",
+    status: "UNVERIFIED ALERT",
+    verificationProgress: 73,
     isActive: false,
     trends: [
       { date: "May 1", score: 78 },
@@ -812,8 +822,10 @@ async function startServer() {
       lastUpdated: new Date().toLocaleDateString(),
       activeCampaignsCount: 0,
       observationCount: 0,
+      contributorCount: 0,
       minimumRequiredObservations: 5,
-      status: "Data Collection Mode",
+      status: "UNVERIFIED ALERT",
+      verificationProgress: 0,
       isActive: false,
       trends: [],
       observations: [],
@@ -862,7 +874,7 @@ async function startServer() {
 
   // API 4: Add user observation with deterministic scoring engine recalculations
   app.post("/api/observations", async (req, res) => {
-    const { catalogId, region, city, townOrArrondissement, neighborhood, description, photoUrl, photoUrls, reporterName, reporterEmail, pollutionTag } = req.body;
+    const { catalogId, region, city, townOrArrondissement, neighborhood, description, photoUrl, photoUrls, imageHash, reporterName, reporterEmail, pollutionTag } = req.body;
 
     if (!description) {
       return res.status(400).json({ error: "Observation description is required." });
@@ -1054,6 +1066,7 @@ async function startServer() {
       catalogId: targetCatalog.id,
       photoUrl: finalPhotoUrl,
       photoUrls: photoUrls || [finalPhotoUrl],
+      imageHash: imageHash || null,
       description,
       reporterName: reporterName || userStats.fullName,
       timestamp: new Date().toISOString(),
@@ -1948,8 +1961,9 @@ ${activityClause}
 
 const appPromise = startServer();
 
+import serverless from "serverless-http";
+
 export const handler = async (event: any, context: any) => {
-  const serverless = (await import('serverless-http')).default;
   const app = await appPromise;
   
   // Clone the event to safely modify the path

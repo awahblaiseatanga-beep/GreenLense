@@ -31,8 +31,9 @@ let staticUrl = "";
 let staticKey = "";
 
 try {
-  staticUrl = sanitizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL || "");
-  staticKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
+  // First try standard process.env which is injected via vite.config.ts define block
+  staticUrl = sanitizeSupabaseUrl(process.env.SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || "");
+  staticKey = (process.env.SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
 } catch (e) {
   // Graceful fallback
 }

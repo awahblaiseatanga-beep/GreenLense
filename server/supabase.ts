@@ -64,6 +64,12 @@ export function mapCatalogToClient(row: any, observations: any[] = [], campaigns
   if (!row) return null;
   const mappedObservations = (observations || []).map((o: any) => mapObservationToClient(o)).filter(Boolean);
   const obsCount = mappedObservations.length;
+  const uniqueContributors = new Set(mappedObservations.map((o: any) => o.reporterName)).size;
+  const isVerified = obsCount >= 5 && uniqueContributors >= 3;
+  
+  const obsProg = Math.min(1, obsCount / 5);
+  const contProg = Math.min(1, uniqueContributors / 3);
+  const verificationProgress = Math.round(((obsProg + contProg) / 2) * 100);
   
   return {
     id: row.id,
@@ -71,16 +77,18 @@ export function mapCatalogToClient(row: any, observations: any[] = [], campaigns
     city: row.city,
     townOrArrondissement: row.town_or_arrondissement,
     neighborhood: row.neighborhood,
-    envScore: obsCount < 5 ? null : row.env_score,
-    dirtinessScore: obsCount < 5 || row.dirtiness_score === -1 ? "Insufficient Data" : row.dirtiness_score,
-    dirtinessTrend: obsCount < 5 ? "Insufficient Data" : row.dirtiness_trend,
+    envScore: !isVerified ? null : row.env_score,
+    dirtinessScore: !isVerified || row.dirtiness_score === -1 ? "Insufficient Data" : row.dirtiness_score,
+    dirtinessTrend: !isVerified ? "Insufficient Data" : row.dirtiness_trend,
     activeCampaignsCount: row.active_campaigns_count,
     lastUpdated: row.last_updated ? new Date(row.last_updated).toLocaleDateString() : "N/A",
     observationCount: obsCount,
+    contributorCount: uniqueContributors,
     minimumRequiredObservations: 5,
-    status: obsCount < 5 ? "Data Collection Mode" : "Active",
-    isActive: obsCount >= 5,
-    activationDate: obsCount >= 5 ? new Date(row.last_updated || new Date()).toLocaleDateString() : undefined,
+    status: !isVerified ? "UNVERIFIED ALERT" : "VERIFIED CATALOG",
+    verificationProgress,
+    isActive: isVerified,
+    activationDate: isVerified ? new Date(row.last_updated || new Date()).toLocaleDateString() : undefined,
     coordinates: {
       lat: row.coordinates_lat,
       lon: row.coordinates_lon,
