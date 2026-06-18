@@ -72,7 +72,7 @@ export default function App() {
   const [showOfflineBanner, setShowOfflineBanner] = useState(true);
 
   // Sync state from server Express API - with robust offline fallbacks
-  const refreshPlatformData = async () => {
+  const refreshPlatformData = async (autoSelectId?: string) => {
     setIsLoading(true);
     try {
       // 1. Sync any offline pending observations first
@@ -162,6 +162,22 @@ export default function App() {
         setOrganizations(orgsData);
         setUserStats(userData);
         
+        // Auto-select referenced target catalog if present
+        const selId = autoSelectId || localStorage.getItem("greenlens_alertId_ref");
+        if (selId) {
+          const matched = catalogsData.find((c: any) => c.id === selId);
+          if (matched) {
+            setSelectedCatalog(matched);
+            console.log("⚡ Auto-selected referenced catalog on data load:", matched.neighborhood);
+          }
+        } else if (selectedCatalog) {
+          const matched = catalogsData.find((c: any) => c.id === selectedCatalog.id);
+          if (matched) {
+            setSelectedCatalog(matched);
+            console.log("⚡ Synced currently open selectedCatalog on refresh:", matched.neighborhood);
+          }
+        }
+        
         // Save successfully updated data to persistent local cache
         localStorage.setItem("greenlens_catalogs", JSON.stringify(catalogsData));
         localStorage.setItem("greenlens_organizations", JSON.stringify(orgsData));
@@ -178,7 +194,15 @@ export default function App() {
         const cachedOrgs = localStorage.getItem("greenlens_organizations");
         const cachedStats = localStorage.getItem("greenlens_userstats");
         
-        if (cachedCats) setCatalogs(JSON.parse(cachedCats));
+        if (cachedCats) {
+          const list = JSON.parse(cachedCats);
+          setCatalogs(list);
+          const selId = autoSelectId || localStorage.getItem("greenlens_alertId_ref");
+          if (selId) {
+            const matched = list.find((c: any) => c.id === selId);
+            if (matched) setSelectedCatalog(matched);
+          }
+        }
         if (cachedOrgs) setOrganizations(JSON.parse(cachedOrgs));
         if (cachedStats) setUserStats(JSON.parse(cachedStats));
       } catch (e) {
@@ -192,7 +216,21 @@ export default function App() {
   };
 
   useEffect(() => {
-    refreshPlatformData();
+    // Parse URL invitation/referral parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const ref = urlParams.get("ref");
+    const alertId = urlParams.get("alertId") || urlParams.get("catalogId");
+    
+    if (ref) {
+      localStorage.setItem("greenlens_referrer", ref);
+      console.info("⚡ Invitation referral captured. Ref:", ref);
+    }
+    if (alertId) {
+      localStorage.setItem("greenlens_alertId_ref", alertId);
+      console.info("⚡ Invitation alertId captured. AlertId:", alertId);
+    }
+
+    refreshPlatformData(alertId || undefined);
 
     // Check for active Supabase OAuth or Email sessions to restore session state immediately
     const checkActiveSession = async () => {
@@ -200,6 +238,26 @@ export default function App() {
         const { getSupabaseClient } = await import("./supabaseClient");
         const activeSupabase = await getSupabaseClient();
         if (activeSupabase) {
+          // Recover session from URL hash or query if present (useful in Netlify/iframe popups fallback redirects)
+          const hash = window.location.hash || window.location.search;
+          if (hash && (hash.includes("access_token=") || hash.includes("code="))) {
+            window.history.replaceState(null, "", window.location.pathname);
+            if (hash.includes("access_token=")) {
+              const params = new URLSearchParams(hash.replace("#", "?"));
+              const access_token = params.get("access_token");
+              const refresh_token = params.get("refresh_token");
+              if (access_token && refresh_token) {
+                await activeSupabase.auth.setSession({ access_token, refresh_token });
+              }
+            } else if (hash.includes("code=")) {
+              const params = new URLSearchParams(hash);
+              const code = params.get("code");
+              if (code) {
+                await activeSupabase.auth.exchangeCodeForSession(code);
+              }
+            }
+          }
+
           const { data: { session } } = await activeSupabase.auth.getSession();
           if (session?.user) {
             console.info("Discovered active Ranger session on Supabase:", session.user.email);
@@ -214,8 +272,24 @@ export default function App() {
                 if (liveStats && liveStats.email === session.user.email) {
                   statsToUse = liveStats;
                 }
+              } else {
+                // If user-stats 404s/fails, auto-register via Google OAuth API route
+                const googleRes = await fetch("/api/auth/google", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    email: session.user.email,
+                    fullName: session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split("@")[0] || "Eco Ranger"
+                  })
+                });
+                if (googleRes.ok) {
+                  const googleData = await googleRes.json();
+                  statsToUse = googleData.userStats;
+                }
               }
-            } catch(e) {}
+            } catch(e) {
+              console.warn("Express backend is offline or slow, attempting cache lookup:", e);
+            }
 
             if (!statsToUse) {
               const cachedStatsStr = localStorage.getItem("greenlens_userstats");
@@ -291,11 +365,43 @@ export default function App() {
       localStorage.setItem("greenlens_catalogs", JSON.stringify(updated));
       return updated;
     });
+    if (selectedCatalog && selectedCatalog.id === catalog.id) {
+      setSelectedCatalog(catalog);
+    }
     setUserStats(updatedUserStats);
     if (updatedUserStats) {
       localStorage.setItem("greenlens_userstats", JSON.stringify(updatedUserStats));
     }
-    setSuccessFlashMessage("New ecological report categorized by AI!");
+    
+    // Check and trigger referral success conversion
+    const referrer = localStorage.getItem("greenlens_referrer");
+    const refAlertId = localStorage.getItem("greenlens_alertId_ref");
+    const currentUserEmail = updatedUserStats?.email || newObs?.reporterEmail;
+    
+    if (referrer && currentUserEmail && referrer !== currentUserEmail && refAlertId === catalog.id) {
+      fetch("/api/referrals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inviterId: referrer,
+          newContributorId: currentUserEmail,
+          alertId: catalog.id
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        console.log("⚡ Success: Referral conversion tracked:", data);
+        // Clean up from state to prevent dual counting
+        localStorage.removeItem("greenlens_referrer");
+        localStorage.removeItem("greenlens_alertId_ref");
+        setSuccessFlashMessage("Verification invite referral registered! Points awarded to inviter.");
+      })
+      .catch(err => {
+        console.warn("Could not register referral conversion:", err);
+      });
+    } else {
+      setSuccessFlashMessage("New ecological report categorized by AI!");
+    }
   };
 
   const [successFlashMessage, setSuccessFlashMessage] = useState("");
@@ -358,6 +464,7 @@ export default function App() {
           setUserStats(stats);
           localStorage.setItem("greenlens_userstats", JSON.stringify(stats));
           localStorage.setItem("greenlens_logged_in", "true");
+          setShowWelcome(false);
         }}
       />
     );
@@ -498,6 +605,7 @@ export default function App() {
           catalog={selectedCatalog}
           onClose={() => setSelectedCatalog(null)}
           onCompleteCampaign={handleCompleteCampaign}
+          onAddObservation={handleObservationAdded}
         />
       )}
 

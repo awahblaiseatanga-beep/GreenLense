@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   MapPin,
   Camera,
@@ -19,6 +20,8 @@ import {
   Flame,
   User,
   Shield,
+  ShieldCheck,
+  ShieldAlert,
   Layers,
   Sparkles,
   Search,
@@ -169,6 +172,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [successResponse, setSuccessResponse] = useState<any>(null);
+  const [rejectionData, setRejectionData] = useState<any | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -217,8 +221,9 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
       let processedCount = 0;
       let duplicatesSkipped = 0;
       const newPhotos: {url: string, name: string}[] = [];
+      let lastDuplicateAreaId = "";
 
-      files.forEach((file) => {
+      files.forEach((file: File) => {
         const reader = new FileReader();
         reader.onload = (event) => {
           const img = new Image();
@@ -241,8 +246,13 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
 
             if (isDuplicate) {
               duplicatesSkipped++;
+              if (existingCat) {
+                lastDuplicateAreaId = existingCat.id;
+              } else {
+                lastDuplicateAreaId = `${region}_${city}_${town}`.replace(/\s+/g, "_").toLowerCase();
+              }
               processedCount++;
-              if (processedCount === files.length) finalizeUpload(newPhotos, duplicatesSkipped);
+              if (processedCount === files.length) finalizeUpload(newPhotos, duplicatesSkipped, lastDuplicateAreaId);
               return;
             }
 
@@ -278,7 +288,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
             }
 
             processedCount++;
-            if (processedCount === files.length) finalizeUpload(newPhotos, duplicatesSkipped);
+            if (processedCount === files.length) finalizeUpload(newPhotos, duplicatesSkipped, lastDuplicateAreaId);
           };
           img.src = event.target?.result as string;
         };
@@ -287,10 +297,29 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
     }
   };
 
-  const finalizeUpload = (newPhotos: any[], duplicatesSkipped: number) => {
+  const finalizeUpload = (newPhotos: any[], duplicatesSkipped: number, duplicateAreaId?: string) => {
     if (duplicatesSkipped > 0) {
-      alert(`Duplicate Validation Error:\n\n${duplicatesSkipped} image(s) were too similar to existing evidence in this area. Please upload different perspectives to help the community verify.`);
+      const areaId = duplicateAreaId || `${region}_${city}_${town}`.replace(/\s+/g, "_").toLowerCase();
+      const userId = userStats?.email || "anonymous_ranger";
+      const timestamp = new Date().toISOString();
+
+      const rejEvent = {
+        reason: "duplicate_image",
+        timestamp,
+        userId,
+        areaId
+      };
+
+      setRejectionData(rejEvent);
+
+      // Post logs to server API
+      fetch("/api/rejections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rejEvent)
+      }).catch(err => console.warn("Failed to post duplicate rejection to Express server:", err));
     }
+
     if (newPhotos.length > 0) {
       setUploadedPhotos(prev => [...prev, ...newPhotos]);
     }
@@ -465,10 +494,29 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
             
             <div className="space-y-2">
               <h3 className="text-lg font-extrabold text-gray-950">Observation Filed Successfully!</h3>
-              {(successResponse.catalog?.observationCount || 1) < 5 ? (
+              {(successResponse.catalog?.status === "UNVERIFIED ALERT" && successResponse.catalog?.observations?.filter((o: any) => o.reporterName === (userStats?.fullName || "Eco Scout")).length > 2) ? (
+                <div className="text-xs text-left max-w-md mx-auto bg-amber-50 border border-amber-200 text-amber-900 px-4 py-4 rounded-xl space-y-2 font-medium shadow-2xs" id="contributor-limit-warning">
+                  <div className="flex items-center gap-1.5 text-amber-800 font-extrabold uppercase text-[9px] font-mono tracking-wider mb-1">
+                    <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span>Verification Balance Rule</span>
+                  </div>
+                  <p className="font-bold text-gray-900 leading-snug text-xs">
+                    Thank you for contributing.
+                  </p>
+                  <p className="text-gray-700 leading-relaxed text-[11px]">
+                    Your additional observations have been recorded and will help track environmental changes over time.
+                  </p>
+                  <p className="text-gray-700 leading-relaxed text-[11px]">
+                    For area verification, GreenLens requires evidence from multiple community contributors.
+                  </p>
+                  <p className="font-bold text-amber-900 text-[11.5px] pt-1">
+                    Help invite others to contribute.
+                  </p>
+                </div>
+              ) : (successResponse.catalog?.observationCount || 1) < 5 ? (
                 <div className="text-xs font-bold max-w-md mx-auto leading-relaxed bg-emerald-50 border border-emerald-100 text-emerald-800 p-3 rounded-lg flex flex-col items-center gap-1.5">
                   <span>You helped complete this area&apos;s environmental profile.</span>
-                  <span className="text-[10px] text-emerald-600 font-mono">Validation Progress: {successResponse.catalog?.observationCount || 1} / 5</span>
+                  <span className="text-[10px] text-emerald-600 font-mono">Validation Progress: {successResponse.catalog?.countedObservations || successResponse.catalog?.observationCount || 1} / 5</span>
                 </div>
               ) : (successResponse.catalog?.observationCount === 5) ? (
                 <div className="text-xs font-bold max-w-md mx-auto leading-relaxed bg-indigo-50 border border-indigo-200 text-indigo-800 p-3 rounded-xl flex flex-col items-center gap-2 shadow-xs">
@@ -500,6 +548,50 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
                 <span className="font-extrabold text-emerald-800 font-mono">{successResponse.userStats?.level || "Capitaine Eco"}</span>
               </div>
             </div>
+
+            {successResponse.catalog && (successResponse.catalog.status === "UNVERIFIED ALERT" || (successResponse.catalog.countedObservations || 0) < 5 || (successResponse.catalog.contributorCount || 0) < 3) && (
+              <div className="bg-[#25D366]/5 border border-[#25D366]/20 p-4 rounded-xl max-w-sm mx-auto text-left space-y-3 animate-fadeIn" id="success-screen-whatsapp-invite">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 bg-[#25D366] text-white rounded-full flex items-center justify-center shrink-0">
+                    <svg className="h-4.5 w-4.5 fill-current" viewBox="0 0 24 24">
+                      <path d="M12.036 0C5.59 0 .36 5.23 0 11.67c0 2.06.54 4.06 1.57 5.83L0 24l6.5-1.7c1.7.9 3.6 1.4 5.5 1.4 6.45 0 11.68-5.23 11.68-11.68C23.68 5.4 18.45.09 12.036.09z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-gray-900 leading-none">Invite Contributors</h4>
+                    <span className="text-[9px] text-[#20ba56] font-bold">Earn Environmental Referral Points</span>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-gray-650 leading-normal">
+                  This location requires at least <span className="font-bold text-gray-900">5 observations</span> and <span className="font-bold text-gray-900">3 unique contributors</span> to trigger official catalog activation. Invite other community witnesses to contribute evidence!
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cat = successResponse.catalog;
+                    const areaName = `${cat.neighborhood ? cat.neighborhood + ', ' : ''}${cat.city || cat.region || 'Cameroon Local Area'}`;
+                    const obsCount = cat.countedObservations || cat.observationCount || 1;
+                    const contCount = cat.contributorCount || 1;
+                    const refLink = `${window.location.origin}/?ref=${encodeURIComponent(userStats?.email || "anonymous")}&alertId=${encodeURIComponent(cat.id)}`;
+                    
+                    const message = `🚨 Environmental Alert Needs Verification\n\nAn environmental issue has been reported in:\n${areaName}\n\nCurrent Progress:\n${obsCount}/5 Observations\n${contCount}/3 Contributors\n\nGreenLens needs additional community evidence before this area can become an official Environmental Catalog.\n\nAdd your observation here:\n${refLink}\n\nHelp improve environmental intelligence in our community.`;
+                    
+                    const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+                    window.open(waUrl, "_blank");
+                  }}
+                  className="w-full bg-[#25D366] hover:bg-[#20ba56] text-white py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                  id="success-whatsapp-share-btn"
+                >
+                  <svg className="h-4 w-4 fill-current shrink-0" viewBox="0 0 24 24">
+                    <title>WhatsApp</title>
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.459H12a11.8 11.8 0 008.413-3.481 11.8 11.8 0 003.481-8.412c-.003-3.223-1.258-6.254-3.535-8.532z" />
+                  </svg>
+                  Share on WhatsApp
+                </button>
+              </div>
+            )}
 
             <div className="flex justify-center pt-2">
               <button
@@ -883,6 +975,95 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
         )}
         
       </div>
+
+      <AnimatePresence>
+        {rejectionData && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs"
+            id="rejection-modal-overlay"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-2xl max-w-md w-full border border-gray-100 shadow-2xl overflow-hidden flex flex-col"
+              id="rejection-modal-card"
+            >
+              <div className="p-5 flex flex-col items-center text-center">
+                <div className="h-12 w-12 bg-amber-50 rounded-full flex items-center justify-center mb-4 border border-amber-200">
+                  <AlertTriangle className="h-6 w-6 text-amber-600" />
+                </div>
+                
+                <h3 className="text-lg font-black text-gray-950 leading-tight mb-2">
+                  Image Already Exists
+                </h3>
+                
+                <p className="text-xs text-gray-500 leading-relaxed max-w-sm mb-4">
+                  This image is too similar to environmental evidence already submitted for this area. 
+                  Please upload a different image showing another angle, perspective, or environmental condition.
+                </p>
+
+                {/* Optional Help Text */}
+                <div className="w-full bg-emerald-50/60 border border-emerald-100/50 rounded-xl p-3.5 text-left text-xs mb-1">
+                  <span className="font-bold text-emerald-800 uppercase tracking-wider text-[10px] font-mono block mb-2">
+                    Tips for Better Environmental Evidence
+                  </span>
+                  <ul className="space-y-1.5 text-gray-600 font-medium">
+                    <li className="flex items-start gap-1.5 text-[11px]">
+                      <span className="text-emerald-600 font-bold">✓</span>
+                      <span>Take photos from different angles</span>
+                    </li>
+                    <li className="flex items-start gap-1.5 text-[11px]">
+                      <span className="text-emerald-600 font-bold">✓</span>
+                      <span>Capture a wider area</span>
+                    </li>
+                    <li className="flex items-start gap-1.5 text-[11px]">
+                      <span className="text-emerald-600 font-bold">✓</span>
+                      <span>Show additional waste accumulation</span>
+                    </li>
+                    <li className="flex items-start gap-1.5 text-[11px]">
+                      <span className="text-emerald-600 font-bold">✓</span>
+                      <span>Show nearby drainage, roads, or rivers</span>
+                    </li>
+                    <li className="flex items-start gap-1.5 text-[11px]">
+                      <span className="text-emerald-600 font-bold">✓</span>
+                      <span>Document environmental changes over time</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="bg-gray-50/80 px-5 py-3.5 border-t border-gray-150 flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setRejectionData(null)}
+                  className="px-4 py-2 text-xs font-bold text-gray-550 hover:text-gray-800 border border-gray-200 bg-white hover:bg-gray-550 rounded-lg transition-colors cursor-pointer"
+                  id="rejection-cancel-btn"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRejectionData(null);
+                    triggerFileSelector();
+                  }}
+                  className="px-4 py-2 text-xs font-bold bg-[#00450d] hover:bg-emerald-900 text-white border border-emerald-950 rounded-lg transition-colors shadow-sm cursor-pointer"
+                  id="rejection-choose-another-btn"
+                >
+                  Choose Another Image
+                </button>
+              </div>
+
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

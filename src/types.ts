@@ -40,6 +40,7 @@ export interface Observation {
   };
   facebookPostUrl?: string;
   imageHash?: string;
+  isCountedForActivation?: boolean;
 }
 
 export interface Verification {
@@ -88,14 +89,16 @@ export interface EnvironmentalCatalog {
     score: number;
   }[];
   // Validation System Fields
-  observationCount: number;
-  contributorCount: number;
-  minimumRequiredObservations: number;
-  status: "UNVERIFIED ALERT" | "VERIFIED CATALOG";
-  verificationProgress: number;
+  observationCount?: number;
+  countedObservations?: number;
+  additionalObservations?: number;
+  contributorCount?: number;
+  minimumRequiredObservations?: number;
+  status?: "UNVERIFIED ALERT" | "VERIFIED CATALOG" | "Active";
+  verificationProgress?: number;
   activationDate?: string;
   firstScoreDate?: string;
-  isActive: boolean;
+  isActive?: boolean;
 }
 
 export interface Organization {
@@ -132,6 +135,8 @@ export interface UserStats {
   phone?: string;
   role?: "Citizen Scientist" | "Eco Scout" | "Community Guardian" | "Environmental Advocate" | "Green Champion" | "NGO Representative";
   organizationName?: string;
+  referralsCount?: number;
+  avatarUrl?: string;
 }
 
 export interface EcoPulseCheckIn {

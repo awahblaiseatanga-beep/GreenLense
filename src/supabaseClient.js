@@ -26,6 +26,27 @@ function isValidSupabaseUrl(url) {
   }
 }
 
+export function checkIsServiceRoleKey(key) {
+  if (!key) return false;
+  try {
+    const parts = key.split('.');
+    if (parts.length < 2) return false;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const parsed = JSON.parse(jsonPayload);
+    return parsed && (parsed.role === "service_role" || parsed.iss === "service_role");
+  } catch (e) {
+    // Basic text scanning fallback if atob fails
+    return key.toLowerCase().includes("service_role");
+  }
+}
+
 // Try immediate static detection (build time env vars)
 let staticUrl = "";
 let staticKey = "";
@@ -41,11 +62,15 @@ try {
 export let supabase = null;
 
 if (staticUrl && staticKey && isValidSupabaseUrl(staticUrl)) {
-  try {
-    supabase = createClient(staticUrl, staticKey);
-    console.log("Supabase static client initialized successfully.");
-  } catch (err) {
-    console.error("Static Supabase initialization failed:", err);
+  if (checkIsServiceRoleKey(staticKey)) {
+    console.warn("Supabase static client skip: Forbidden service_role key provided as anon key. Standardizing to safe offline fallback/express proxy.");
+  } else {
+    try {
+      supabase = createClient(staticUrl, staticKey);
+      console.log("Supabase static client initialized successfully.");
+    } catch (err) {
+      console.error("Static Supabase initialization failed:", err);
+    }
   }
 }
 
@@ -67,8 +92,12 @@ export async function getSupabaseClient() {
         const url = sanitizeSupabaseUrl(rawUrl);
         
         if (url && key && isValidSupabaseUrl(url)) {
-          supabase = createClient(url, key);
-          console.log("Supabase dynamic client initialized successfully matching backend state.");
+          if (checkIsServiceRoleKey(key)) {
+            console.warn("Supabase dynamic client initialization skipped: Loaded SUPABASE_ANON_KEY is a backend secret service_role key. Defaulting safely to server-side express authentication proxy.");
+          } else {
+            supabase = createClient(url, key);
+            console.log("Supabase dynamic client initialized successfully matching backend state.");
+          }
         }
       }
     } catch (err) {

@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { UserStats, CameroonRegion } from "../types";
-import { supabase, getSupabaseClient } from "../supabaseClient";
+import { supabase, getSupabaseClient, checkIsServiceRoleKey } from "../supabaseClient";
 import greenlensLogo from "../assets/images/greenlens_logo_1781522444785.jpg";
 import { 
   Mail, 
@@ -96,6 +96,25 @@ export default function AuthPage({ onAuthSuccess, onClose }: AuthPageProps) {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isServiceRoleDetected, setIsServiceRoleDetected] = useState(false);
+
+  useEffect(() => {
+    const checkSupabaseConfig = async () => {
+      try {
+        const res = await fetch("/api/supabase-config");
+        if (res.ok) {
+          const config = await res.json();
+          const key = (config.supabaseAnonKey || "").trim();
+          if (key && checkIsServiceRoleKey(key)) {
+            setIsServiceRoleDetected(true);
+          }
+        }
+      } catch (e) {
+        console.warn("Failed checking Supabase API service role key leak:", e);
+      }
+    };
+    checkSupabaseConfig();
+  }, []);
 
   // Trigger Supabase OAuth sign-in flow for Google
   const handleGoogleOAuthSignIn = async () => {
@@ -148,7 +167,13 @@ export default function AuthPage({ onAuthSuccess, onClose }: AuthPageProps) {
     const handleAuthMessage = async (event: MessageEvent) => {
       // Validate origin is from standard domains to ensure security
       const origin = event.origin;
-      if (!origin.endsWith(".run.app") && !origin.includes("localhost") && !origin.includes("127.0.0.1")) {
+      const isAllowed = 
+        origin === window.location.origin ||
+        origin.endsWith(".run.app") || 
+        origin.endsWith(".google.com") || 
+        origin.includes("localhost") || 
+        origin.includes("127.0.0.1");
+      if (!isAllowed) {
         return;
       }
 
@@ -552,6 +577,30 @@ export default function AuthPage({ onAuthSuccess, onClose }: AuthPageProps) {
           <p className="text-[9px] sm:text-[10px] font-mono font-bold tracking-widest text-emerald-400 uppercase text-center mb-4 sm:mb-5">
             Authorized Ecological Ranger Portal
           </p>
+
+        {isServiceRoleDetected && (
+          <div className="w-full bg-red-950/40 border border-red-500/40 rounded-2xl p-4 text-xs text-red-105 flex flex-col gap-2 font-sans mb-4 shadow-lg animate-fadeIn" id="auth-service-role-banner">
+            <div className="flex items-center gap-2 text-red-400 font-bold uppercase tracking-wider text-[11px] font-mono">
+              <AlertCircle className="h-4.5 w-4.5 text-red-500 shrink-0" />
+              Ranger Key Configuration Alert
+            </div>
+            <p className="leading-relaxed">
+              You are running with a Supabase <strong className="text-red-350 font-bold">service_role (secret) key</strong> configured as your <strong className="text-red-350 font-bold">SUPABASE_ANON_KEY</strong>.
+              Browser execution of secret keys is blocked to protect your administrative credentials.
+            </p>
+            <div className="bg-black/40 text-gray-300 text-[10px] leading-relaxed p-3 rounded-xl border border-white/5 font-mono space-y-2 mt-1">
+              <div className="text-emerald-405 font-bold">👉 How to Fix in 1 Minute:</div>
+              <div>1. Open the <strong className="text-white">Secrets / Settings</strong> panel in AI Studio.</div>
+              <div>2. Go to your Supabase Dashboard -&gt; <strong className="text-white">Project Settings</strong> -&gt; <strong className="text-white">API</strong>.</div>
+              <div>3. Copy the <strong className="text-emerald-405 font-bold">anon / public</strong> key (NOT the service_role key).</div>
+              <div>4. Paste it into the <strong className="text-white">SUPABASE_ANON_KEY</strong> secret value.</div>
+              <div>5. (Optional) Paste the service_role key into <strong className="text-white">SUPABASE_SERVICE_ROLE_KEY</strong>.</div>
+            </div>
+            <p className="text-[9px] text-gray-400 font-mono italic mt-1 text-center">
+              💡 Greenfield Fallback Activated: We bypassed browser client loading. Feel free to login or sign up above right now!
+            </p>
+          </div>
+        )}
 
         {/* Message / Status banner */}
         {errorMsg && (

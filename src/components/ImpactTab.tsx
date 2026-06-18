@@ -6,6 +6,8 @@
 import React, { useState } from "react";
 import { ListCollapse, Plus, Sparkles, Building2, Eye, ShieldCheck, Mail, Phone, Calendar, ArrowRight, CheckCircle2, Award, ArrowUpRight, Loader, Search } from "lucide-react";
 import { EnvironmentalCatalog, Campaign, Organization } from "../types";
+import doualaBeforeImg from "../assets/images/douala_before_1781775092948.jpg";
+import doualaAfterImg from "../assets/images/douala_after_1781775108257.jpg";
 
 const CAMPAIGN_PRESET_IMAGES = [
   {
@@ -75,18 +77,18 @@ export default function ImpactTab({
 
   // Enforce a single high-quality static sample campaign signifying the app's real purpose: Cameroon environmental restoration
   const sampleCompletedCampaign: Campaign = {
-    id: "sample-restoration-melen",
-    title: "Melen Drainage Channel Restoration & Plastic Sorting Drive",
-    organizationName: "Association Eco-Cameroon",
-    catalogId: "LOC_MLN_YAO_CEN_CMR",
-    description: "Melen youth groups mobilized to restore natural flow on the blocked secondary drainage channel, successfully extracting 340kg of congested polyethylene plastics and installing custom mesh trash collection traps.",
-    startDate: "2026-06-10",
-    endDate: "2026-06-13",
+    id: "sample-restoration-douala",
+    title: "Douala Market Sanitation District & Drainage Channel Revitalization",
+    organizationName: "Douala Green Action Coalition",
+    catalogId: "LOC_BON_DOU_LIT_CMR",
+    description: "We successfully mobilized Douala IV youth squads to clear severe plastic bottlenecks alongside the commercial avenue. Over 1,200kg of polyethylene bottles and clogged debris were cleared and loaded onto the central municipal collection vehicle. Natural drainage has been restored to mitigate flood water backups.",
+    startDate: "2026-06-12",
+    endDate: "2026-06-15",
     status: "Completed",
-    beforeImage: "https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=600&q=80", // Real plastic dumpsite in Cameroon context
-    afterImage: "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&w=600&q=80", // Pristine clear stream flowing in nature
+    beforeImage: doualaBeforeImg,
+    afterImage: doualaAfterImg,
     verifications: [],
-    verifiedImprovementScore: 85,
+    verifiedImprovementScore: 92,
     verificationsCount: 0
   };
 

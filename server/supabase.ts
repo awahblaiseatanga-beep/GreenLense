@@ -190,7 +190,8 @@ export function mapUserStatsToClient(row: any): any {
     neighborhood: row.neighborhood,
     phone: row.phone,
     role: row.role,
-    organizationName: row.organization_name
+    organizationName: row.organization_name,
+    avatarUrl: row.avatar_url || ""
   };
 }
 
@@ -505,33 +506,49 @@ export async function saveLiveUserStats(stats: any): Promise<any | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
 
-  try {
-    const dbRow = {
-      id: stats.email || "user_main",
-      full_name: stats.fullName,
-      email: stats.email || "user@example.com",
-      level: stats.level,
-      xp: stats.xp,
-      contributions_count: stats.contributionsCount,
-      verified_cleanups_count: stats.verifiedCleanupsCount,
-      eco_pulse_score: stats.ecoPulseScore,
-      carbon_footprint: stats.carbonFootprint,
-      region: stats.region,
-      city: stats.city,
-      town_or_arrondissement: stats.townOrArrondissement,
-      neighborhood: stats.neighborhood,
-      phone: stats.phone,
-      role: stats.role,
-      organization_name: stats.organizationName
-    };
+  const dbRow: any = {
+    id: stats.email || "user_main",
+    full_name: stats.fullName,
+    email: stats.email || "user@example.com",
+    level: stats.level,
+    xp: stats.xp,
+    contributions_count: stats.contributionsCount,
+    verified_cleanups_count: stats.verifiedCleanupsCount,
+    eco_pulse_score: stats.ecoPulseScore,
+    carbon_footprint: stats.carbonFootprint,
+    region: stats.region,
+    city: stats.city,
+    town_or_arrondissement: stats.townOrArrondissement,
+    neighborhood: stats.neighborhood,
+    phone: stats.phone,
+    role: stats.role,
+    organization_name: stats.organizationName,
+    avatar_url: stats.avatarUrl || ""
+  };
 
+  try {
     const { data, error } = await supabase
       .from("users_stats")
       .upsert(dbRow)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // If error is about avatar_url column missing, retry without it
+      const errMsg = error.message || "";
+      if (errMsg.includes("avatar_url") || errMsg.includes("column") || error.code === "42703") {
+        console.warn("⚠️ avatar_url column missing from users_stats; retrying without avatar_url database field.");
+        delete dbRow.avatar_url;
+        const { data: retryData, error: retryErr } = await supabase
+          .from("users_stats")
+          .upsert(dbRow)
+          .select()
+          .single();
+        if (retryErr) throw retryErr;
+        return mapUserStatsToClient(retryData);
+      }
+      throw error;
+    }
     return mapUserStatsToClient(data);
   } catch (err) {
     handleSupabaseError("users_stats-write", err);

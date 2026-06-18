@@ -80,16 +80,49 @@ function calculateDirtyScoreAndTrend(catalog: any) {
   // Unique Contributors Calculation
   const uniqueContributors = new Set(obsList.map((o: any) => o.reporterName)).size;
 
+  // Support contributor cap for verification purposes (Max Counted Observations Per Contributor = 2)
+  // Process observations chronologically from oldest to newest to tag first 2 correctly
+  const sortedObs = [...obsList].sort((a: any, b: any) => {
+    return new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime();
+  });
+
+  const contributorCounts: Record<string, number> = {};
+  let countedObs = 0;
+  let additionalObs = 0;
+
+  sortedObs.forEach((subObs: any) => {
+    // Tag the correct observation references in the target list
+    const obs = obsList.find((originalObs: any) => originalObs.id === subObs.id) || subObs;
+    const reporter = obs.reporterName || "anonymous";
+    if (!contributorCounts[reporter]) {
+      contributorCounts[reporter] = 0;
+    }
+    
+    if (contributorCounts[reporter] < 2) {
+      contributorCounts[reporter]++;
+      countedObs++;
+      obs.isCountedForActivation = true;
+    } else {
+      additionalObs++;
+      obs.isCountedForActivation = false;
+    }
+  });
+
   // Track system validation rules natively
   catalog.observationCount = obsList.length;
+  catalog.countedObservations = countedObs;
+  catalog.additionalObservations = additionalObs;
   catalog.contributorCount = uniqueContributors;
   catalog.minimumRequiredObservations = 5;
   
-  const obsProg = Math.min(1, catalog.observationCount / 5);
+  const obsProg = Math.min(1, countedObs / 5);
   const contProg = Math.min(1, catalog.contributorCount / 3);
   catalog.verificationProgress = Math.round(((obsProg + contProg) / 2) * 100);
 
-  if (catalog.observationCount < 5 || catalog.contributorCount < 3) {
+  // Exception mode: If area already exists as an Active Environmental Catalog, allow unlimited observations and do not downgrade.
+  const isAlreadyActive = catalog.isActive === true || catalog.status === "Active" || catalog.status === "VERIFIED CATALOG";
+
+  if (!isAlreadyActive && (countedObs < 5 || catalog.contributorCount < 3)) {
     catalog.dirtinessScore = "Insufficient Data";
     catalog.dirtinessTrend = "Insufficient Data";
     catalog.status = "UNVERIFIED ALERT";
@@ -98,14 +131,14 @@ function calculateDirtyScoreAndTrend(catalog: any) {
     return;
   }
 
-  // Set to active if passed
+  // Set to active if passed verification or already active
   catalog.status = "VERIFIED CATALOG";
   catalog.isActive = true;
   if (!catalog.activationDate) {
     catalog.activationDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric"});
   }
 
-  // Assign Numerical Values & Recency Factor
+  // Assign Numerical Values & Recency Factor based on ALL observations
   let totalWeightedScore = 0;
   let totalWeight = 0;
   const now = new Date();
@@ -872,6 +905,126 @@ async function startServer() {
     res.json(catalog);
   });
 
+  // API to log rejection events
+  const rejectionLogs: any[] = [];
+  app.post("/api/rejections", (req, res) => {
+    const { reason, timestamp, userId, areaId } = req.body;
+    const logEvent = {
+      id: "rej_" + Math.random().toString(36).substring(2, 11),
+      reason: reason || "duplicate_image",
+      timestamp: timestamp || new Date().toISOString(),
+      userId: userId || "anonymous",
+      areaId: areaId || "unknown_area",
+    };
+    rejectionLogs.unshift(logEvent);
+    console.info("Rejection event logged on server:", logEvent);
+    res.json({ success: true, log: logEvent });
+  });
+
+  app.get("/api/rejections", (req, res) => {
+    res.json(rejectionLogs);
+  });
+
+  // API to log referral tracking entries
+  const referralsLogs: any[] = [];
+  app.post("/api/referrals", async (req, res) => {
+    const { inviterId, newContributorId, alertId } = req.body;
+    
+    if (!inviterId || !newContributorId || !alertId) {
+      return res.status(400).json({ error: "inviterId, newContributorId, and alertId are all required." });
+    }
+
+    // Check if duplicate relation already recorded
+    const duplicate = referralsLogs.find(r => r.inviterId === inviterId && r.newContributorId === newContributorId && r.alertId === alertId);
+    if (duplicate) {
+      return res.json({ success: true, alreadyTracked: true, log: duplicate });
+    }
+
+    const logEntry = {
+      id: "ref_" + Math.random().toString(36).substring(2, 11),
+      inviterId,
+      newContributorId,
+      alertId,
+      timestamp: new Date().toISOString()
+    };
+    referralsLogs.unshift(logEntry);
+    console.info("Referral tracking event logged on server:", logEntry);
+
+    // Reward points (Environmental Impact Points / XP) to the inviter
+    try {
+      const liveStats = await getLiveUserStats(inviterId);
+      const targetStats = liveStats || registeredUsersMap[inviterId];
+      if (targetStats) {
+        targetStats.xp = (targetStats.xp || 0) + 40; // Award 40 Environmental Impact XP Points
+        targetStats.referralsCount = (targetStats.referralsCount || 0) + 1;
+        
+        if (targetStats.xp < 100) targetStats.level = "Observer";
+        else if (targetStats.xp < 250) targetStats.level = "Eco Scout";
+        else if (targetStats.xp < 500) targetStats.level = "Community Guardian";
+        else if (targetStats.xp < 1000) targetStats.level = "Environmental Advocate";
+        else targetStats.level = "Green Champion";
+
+        await saveLiveUserStats(targetStats);
+        // Sync static fast memory cache
+        registeredUsersMap[inviterId] = targetStats;
+      }
+    } catch (e) {
+      console.warn("Failed to update inviter's referral reward points on database:", e);
+    }
+
+    res.json({ success: true, log: logEntry, rewarded: true });
+  });
+
+  app.get("/api/referrals", (req, res) => {
+    const { inviterId } = req.query;
+    if (inviterId) {
+      const filtered = referralsLogs.filter(r => r.inviterId === inviterId);
+      return res.json(filtered);
+    }
+    res.json(referralsLogs);
+  });
+
+  // Helper to obtain intelligent, offline local environmental classifications mapped to Cameroon contexts
+  function getOfflineKeywordsClassification(description: string) {
+    const lowerText = (description || "").toLowerCase();
+    if (lowerText.includes("plastic") || lowerText.includes("bottle") || lowerText.includes("gutter") || lowerText.includes("commercial")) {
+      return {
+        pollutionType: "Plastic Sludge & Drain Blockage",
+        severity: "High" as any,
+        confidence: 0.94,
+        tags: ["Drain Blockage", "Plastic Bottled Refuse", "Douala Urban Runoff"],
+        suggestedAction: "Install active physical gutter grates as trash catches and coordinate community 'Investissement Humain' cleanup waves.",
+        waterwayProximity: "Impacts roadside storm gutters"
+      };
+    } else if (lowerText.includes("drain") || lowerText.includes("clog") || lowerText.includes("canal") || lowerText.includes("water") || lowerText.includes("river") || lowerText.includes("stream")) {
+      return {
+        pollutionType: "Blocked Primary Urban Drainage Course",
+        severity: "Critical" as any,
+        confidence: 0.92,
+        tags: ["Urban Drainage Clog", "Stagnant Water Risks", "Rain Season Overflow Alert"],
+        suggestedAction: "Direct mechanical excavation to clear natural water tributaries and install public mesh filters.",
+        waterwayProximity: "Severe (directly blocks primary drainage paths)"
+      };
+    } else if (lowerText.includes("smoke") || lowerText.includes("burn") || lowerText.includes("burning") || lowerText.includes("fire") || lowerText.includes("toxic") || lowerText.includes("chemical")) {
+      return {
+        pollutionType: "Open Trash Burning & Toxic Air Contamination",
+        severity: "Critical" as any,
+        confidence: 0.90,
+        tags: ["Toxic Smoke Emissions", "Spontaneous Burn Pit", "Respiratory Public Danger"],
+        suggestedAction: "Notify local district inspectors and arrange alternative organic/plastic sorted compost dumpsters.",
+        waterwayProximity: "Adjacent to residential blocks"
+      };
+    }
+    return {
+      pollutionType: "Mixed General Anthropogenic Waste",
+      severity: "Medium" as any,
+      confidence: 0.85,
+      tags: ["General Dumping", "Littering Pit"],
+      suggestedAction: "Organize neighborhood physical sweep drives and establish localized trash receptacles.",
+      waterwayProximity: "None immediately detected"
+    };
+  }
+
   // API 4: Add user observation with deterministic scoring engine recalculations
   app.post("/api/observations", async (req, res) => {
     const { catalogId, region, city, townOrArrondissement, neighborhood, description, photoUrl, photoUrls, imageHash, reporterName, reporterEmail, pollutionTag } = req.body;
@@ -946,16 +1099,9 @@ async function startServer() {
       }
     }
 
-    // Call real Gemini if client initialised
+    // Call real Gemini if client initialised, start with our intelligent local keywords categorization fallback
     const client = getGeminiClient();
-    let aiClassification = {
-      pollutionType: "Mixed General Waste",
-      severity: "Medium" as any,
-      confidence: 0.85,
-      tags: ["General Dumping", "Littering"],
-      suggestedAction: "Organize street level sweeps and provide secondary trash recycling points.",
-      waterwayProximity: "None immediately detected"
-    };
+    let aiClassification = getOfflineKeywordsClassification(description);
 
     if (client) {
       try {
@@ -1008,38 +1154,7 @@ async function startServer() {
           if (parsed.pollutionType) aiClassification = parsed;
         }
       } catch (err) {
-        console.error("Failed executing actual Gemini call, invoking graceful fallback:", err);
-      }
-    } else {
-      // Graceful Cameroon-specific keywords analyzer fallback to secure offline performance
-      const lowerText = description.toLowerCase();
-      if (lowerText.includes("plastic") || lowerText.includes("bottle") || lowerText.includes("gutter")) {
-        aiClassification = {
-          pollutionType: "Plastic Sludge & Minor Drain Blockage",
-          severity: "Medium",
-          confidence: 0.92,
-          tags: ["Drain Blockage", "Plastic Bottled Refuse", "Yaoundé Urban Runoff"],
-          suggestedAction: "Install physical gutter grates as trash catches and schedule local civic work cleanup days (called 'Investissement Humain').",
-          waterwayProximity: "Adjacent to seasonal rain channel"
-        };
-      } else if (lowerText.includes("drain") || lowerText.includes("clog") || lowerText.includes("canal") || lowerText.includes("water") || lowerText.includes("river")) {
-        aiClassification = {
-          pollutionType: "Blocked Primary Urban Watercourse",
-          severity: "High",
-          confidence: 0.91,
-          tags: ["Urban Drainage Clog", "Stagnant Water Threat", "Cholera Prevention Alert"],
-          suggestedAction: "Direct mechanical excavators to clear major drainage vectors and install public bins.",
-          waterwayProximity: "Severe (directly impacting tributary water flow)"
-        };
-      } else if (lowerText.includes("smoke") || lowerText.includes("burn") || lowerText.includes("toxic") || lowerText.includes("chemical")) {
-        aiClassification = {
-          pollutionType: "Open Garbage Burning & Air Pollution",
-          severity: "Critical",
-          confidence: 0.88,
-          tags: ["Toxic Smoke Inhalation", "Open Burn Pit", "Respiratory Warning"],
-          suggestedAction: "Alert municipal health inspectors and secure direct organic compost alternative collection tools.",
-          waterwayProximity: "None detected"
-        };
+        console.error("Failed executing actual Gemini call, invoking graceful local camera keywords fallback:", err);
       }
     }
 
@@ -1635,6 +1750,132 @@ async function startServer() {
     res.json(userStats);
   });
 
+  // API 11b: Direct Catalog Override, Score Modification & Reset
+  app.post("/api/catalogs/:id/override", async (req, res) => {
+    const catalogId = req.params.id;
+    const { envScore, dirtinessScore, status, resetAll } = req.body;
+
+    let targetCatalog: any = null;
+    const supabase = getSupabase();
+
+    // Look up and update in live DB if enabled
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("catalogs")
+          .select("*")
+          .eq("id", catalogId)
+          .maybeSingle();
+
+        if (data) {
+          const updates: any = {};
+          if (resetAll) {
+            updates.env_score = null;
+            updates.dirtiness_score = null;
+            updates.status = "UNVERIFIED ALERT";
+            updates.verification_progress = 0;
+            updates.active_campaigns_count = 0;
+          } else {
+            if (envScore !== undefined) {
+              updates.env_score = envScore === null || envScore === "" ? null : parseInt(envScore);
+            }
+            if (dirtinessScore !== undefined) {
+              updates.dirtiness_score = dirtinessScore === "Insufficient Data" || dirtinessScore === null || dirtinessScore === "" ? null : parseInt(dirtinessScore);
+            }
+            if (status !== undefined) {
+              updates.status = status;
+              if (status === "VERIFIED CATALOG") {
+                updates.verification_progress = 100;
+              } else if (status === "UNVERIFIED ALERT") {
+                updates.verification_progress = 0;
+                updates.active_campaigns_count = 0;
+              }
+            }
+          }
+          updates.last_updated = new Date().toLocaleDateString();
+
+          const { error: updateError } = await supabase
+            .from("catalogs")
+            .update(updates)
+            .eq("id", catalogId);
+
+          if (!updateError) {
+             // also insert a trend snapshot
+             if (updates.env_score !== undefined && updates.env_score !== null) {
+               await supabase.from("catalog_trends").insert({
+                 catalog_id: catalogId,
+                 score: updates.env_score
+               });
+             }
+             
+             if (resetAll) {
+               // clear related observations & campaigns in live DB if possible
+               await supabase.from("observations").delete().eq("catalog_id", catalogId);
+               await supabase.from("campaigns").delete().eq("catalog_id", catalogId);
+             }
+
+             const refreshed = await getLiveCatalogs();
+             const updatedCat = (refreshed || []).find((c: any) => c.id === catalogId);
+             return res.json({ success: true, catalog: updatedCat });
+          }
+        }
+      } catch (err) {
+        console.warn("Direct live override exception:", err?.message || err);
+      }
+    }
+
+    // Backup / Fallback in-memory Catalogs array operation
+    targetCatalog = catalogs.find((c) => c.id === catalogId);
+    if (!targetCatalog) {
+      return res.status(404).json({ error: "Catalog area not found." });
+    }
+
+    if (resetAll) {
+      targetCatalog.envScore = null;
+      targetCatalog.dirtinessScore = "Insufficient Data";
+      targetCatalog.status = "UNVERIFIED ALERT";
+      targetCatalog.verificationProgress = 0;
+      targetCatalog.countedObservations = 0;
+      targetCatalog.contributorCount = 0;
+      targetCatalog.activeCampaignsCount = 0;
+      targetCatalog.observations = [];
+      targetCatalog.campaigns = [];
+      targetCatalog.trends = [];
+    } else {
+      if (envScore !== undefined) {
+        targetCatalog.envScore = envScore === null || envScore === "" ? null : parseInt(envScore);
+      }
+      if (dirtinessScore !== undefined) {
+        targetCatalog.dirtinessScore = dirtinessScore === "Insufficient Data" || dirtinessScore === null || dirtinessScore === "" ? "Insufficient Data" : parseInt(dirtinessScore);
+      }
+      if (status !== undefined) {
+        targetCatalog.status = status;
+        if (status === "VERIFIED CATALOG") {
+          targetCatalog.verificationProgress = 100;
+          targetCatalog.minimumRequiredObservations = 0;
+        } else if (status === "UNVERIFIED ALERT") {
+          targetCatalog.verificationProgress = 0;
+          targetCatalog.minimumRequiredObservations = 5;
+          targetCatalog.countedObservations = 0;
+          targetCatalog.contributorCount = 0;
+          targetCatalog.observations = [];
+          targetCatalog.campaigns = [];
+        }
+      }
+    }
+    targetCatalog.lastUpdated = new Date().toLocaleDateString();
+
+    // Trigger trend snapshot point log
+    if (targetCatalog.envScore !== null) {
+      targetCatalog.trends.push({
+        date: new Date().toLocaleDateString(),
+        score: targetCatalog.envScore
+      });
+    }
+
+    res.json({ success: true, catalog: targetCatalog });
+  });
+
   // API 11c: Dyn Supabase configuration loader for browser clients
   app.get("/api/supabase-config", (req, res) => {
     const rawUrl = process.env.SUPABASE_URL || "";
@@ -1843,12 +2084,23 @@ async function startServer() {
           break;
         } catch (err: any) {
           attempts++;
-          const errMsg = err?.message || err;
+          const errMsg = typeof err === "string" ? err : (err?.message || JSON.stringify(err) || "");
           console.warn(`Gemini intelligence insight attempt ${attempts} skipped or timed out:`, errMsg);
-          if (attempts >= maxAttempts) {
-            console.warn("Utilizing high-fidelity local analytical fallback summary generator for client dashboard.");
+          
+          const isCongested = errMsg.includes("503") || 
+                              errMsg.includes("UNAVAILABLE") || 
+                              errMsg.includes("high demand") || 
+                              errMsg.includes("429") || 
+                              errMsg.includes("quota") ||
+                              errMsg.includes("exhausted") ||
+                              errMsg.includes("limit") ||
+                              errMsg.includes("556");
+
+          if (isCongested || attempts >= maxAttempts) {
+            console.warn("Congestion or exhaustion detected. Instantly breaking retry loop to invoke localized high-fidelity fallback.");
+            break;
           } else {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, 600));
           }
         }
       }
