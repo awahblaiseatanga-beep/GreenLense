@@ -12,12 +12,13 @@ import {
   BarChart3, 
   User, 
   ChevronUp,
-  CheckCircle
+  CheckCircle,
+  Trophy
 } from "lucide-react";
 import { UserStats } from "../types";
 import { AnimatedDock, DockItemData } from "./ui/animated-dock";
 
-type TabId = "explore" | "contribute" | "impact" | "insights" | "profile";
+type TabId = "explore" | "contribute" | "impact" | "insights" | "profile" | "leaderboard";
 
 interface DynamicIslandProps {
   activeTab: TabId;
@@ -68,6 +69,7 @@ export default function DynamicIsland({
     { id: "contribute" as TabId, label: "Contribute", icon: Camera },
     { id: "impact" as TabId, label: "Impact", icon: ShieldCheck },
     { id: "insights" as TabId, label: "Insights", icon: BarChart3 },
+    { id: "leaderboard" as TabId, label: "Leaders", icon: Trophy },
     { id: "profile" as TabId, label: "Profile", icon: User },
   ];
 
@@ -109,7 +111,7 @@ export default function DynamicIsland({
     }
     if (isExpanded) {
       return {
-        width: "min(420px, 94vw)",
+        width: "min(480px, 94vw)",
         height: "72px",
         borderRadius: "36px",
         background: "rgba(10, 12, 11, 0.98)",

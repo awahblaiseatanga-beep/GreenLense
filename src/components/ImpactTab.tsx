@@ -640,6 +640,7 @@ export default function ImpactTab({
         </div>
 
       </div>
+
     </div>
   );
 }

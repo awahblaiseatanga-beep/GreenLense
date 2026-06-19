@@ -97,6 +97,7 @@ export interface EnvironmentalCatalog {
   contributorCount?: number;
   minimumRequiredObservations?: number;
   status?: "UNVERIFIED ALERT" | "VERIFIED CATALOG" | "Active";
+  pollutionTag?: "Clean" | "Slightly Polluted" | "Moderately Polluted" | "Highly Polluted" | "Extremely Polluted";
   verificationProgress?: number;
   activationDate?: string;
   firstScoreDate?: string;

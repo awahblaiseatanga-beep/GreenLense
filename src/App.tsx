@@ -12,13 +12,14 @@ import ContributeTab from "./components/ContributeTab";
 import ImpactTab from "./components/ImpactTab";
 import InsightsTab from "./components/InsightsTab";
 import ProfileTab from "./components/ProfileTab";
+import LeaderboardTab from "./components/LeaderboardTab";
 import CatalogDetailModal from "./components/CatalogDetailModal";
 import WelcomePage from "./components/WelcomePage";
 import DynamicIsland from "./components/DynamicIsland";
 import { SEED_CATALOGS, SEED_ORGANIZATIONS, SEED_USER_STATS } from "./data/seedData";
 import greenlensLogo from "./assets/images/greenlens_logo_1781522444785.jpg";
 
-type TabId = "explore" | "contribute" | "impact" | "insights" | "profile";
+type TabId = "explore" | "contribute" | "impact" | "insights" | "profile" | "leaderboard";
 
 export default function App() {
   const [showWelcome, setShowWelcome] = useState<boolean>(() => {
@@ -602,6 +603,12 @@ export default function App() {
                 userStats={userStats} 
                 onEcoPulseSubmitted={() => refreshPlatformData()}
                 onLogout={handleLogout}
+              />
+            )}
+            {activeTab === "leaderboard" && (
+              <LeaderboardTab 
+                organizations={organizations}
+                currentUserStats={userStats}
               />
             )}
           </div>
