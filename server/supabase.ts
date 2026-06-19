@@ -126,6 +126,8 @@ export function mapObservationToClient(row: any): any {
     aiClassification: typeof row.ai_classification === "string" 
       ? JSON.parse(row.ai_classification) 
       : row.ai_classification,
+    isCriticalGrowth: (typeof row.ai_classification === "string" ? JSON.parse(row.ai_classification) : row.ai_classification)?.isCriticalGrowth,
+    criticalChangeDescription: (typeof row.ai_classification === "string" ? JSON.parse(row.ai_classification) : row.ai_classification)?.criticalChangeDescription,
   };
 }
 
@@ -331,7 +333,11 @@ export async function insertLiveObservation(obs: any): Promise<any | null> {
       description: obs.description,
       reporter_name: obs.reporterName,
       pollution_tag: obs.pollutionTag || "Moderately Polluted",
-      ai_classification: obs.aiClassification,
+      ai_classification: {
+        ...(obs.aiClassification || {}),
+        isCriticalGrowth: obs.isCriticalGrowth,
+        criticalChangeDescription: obs.criticalChangeDescription
+      },
       timestamp: obs.timestamp || new Date(),
     };
 

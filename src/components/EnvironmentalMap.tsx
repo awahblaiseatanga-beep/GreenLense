@@ -89,19 +89,41 @@ export default function EnvironmentalMap({
 
       bounds.push([lat, lon]);
 
-      // Color coding based on Environmental Score
-      let scoreColor = "#00450d"; // Good (Green)
+      // Color coding based on Threat Level (pollutionTag) or fallback to envScore
+      let scoreColor = "#00450d"; // safe
       let scoreBackground = "bg-primary";
       let textStatus = "Safe State";
       
-      if (catalog.envScore < 50) {
-        scoreColor = "#b91c1c"; // Critical (Red)
-        scoreBackground = "bg-red-600";
-        textStatus = "Heavy Risk";
-      } else if (catalog.envScore < 75) {
-        scoreColor = "#d97706"; // Moderate (Yellow/Amber)
-        scoreBackground = "bg-amber-600";
-        textStatus = "Community Managed";
+      if (catalog.pollutionTag) {
+        switch(catalog.pollutionTag) {
+          case "Clean":
+          case "Slightly Polluted":
+            scoreBackground = "bg-primary";
+            textStatus = catalog.pollutionTag;
+            break;
+          case "Moderately Polluted":
+            scoreBackground = "bg-amber-600";
+            textStatus = "Moderate Risk";
+            break;
+          case "Highly Polluted":
+            scoreBackground = "bg-orange-600";
+            textStatus = "High Risk";
+            break;
+          case "Extremely Polluted":
+            scoreBackground = "bg-red-700";
+            textStatus = "Critical Risk";
+            break;
+        }
+      } else {
+        if (catalog.envScore < 50) {
+          scoreColor = "#b91c1c"; // Critical (Red)
+          scoreBackground = "bg-red-700";
+          textStatus = "Heavy Risk";
+        } else if (catalog.envScore < 75) {
+          scoreColor = "#d97706"; // Moderate (Yellow/Amber)
+          scoreBackground = "bg-amber-600";
+          textStatus = "Community Managed";
+        }
       }
 
       // Create a gorgeous custom HTML DivIcon (No raw static PNG pin bugs!)
@@ -128,9 +150,7 @@ export default function EnvironmentalMap({
         <div class="p-3 font-sans min-w-[200px]" id="popup-${catalog.id}">
           <div class="mb-1.5 flex items-center justify-between gap-2 border-b border-gray-100 pb-1">
             <span class="text-[9px] font-bold font-mono text-gray-400 uppercase tracking-wider">${catalog.region} Region</span>
-            <span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded text-white ${
-              catalog.envScore >= 75 ? "bg-emerald-700" : catalog.envScore >= 50 ? "bg-amber-600" : "bg-red-700"
-            }">${textStatus}</span>
+            <span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded text-white ${scoreBackground}">${textStatus}</span>
           </div>
           <h4 class="text-sm font-bold text-gray-900 leading-tight mb-0.5">${catalog.neighborhood}</h4>
           <p class="text-[11px] text-gray-500 font-semibold mb-2">${catalog.city}, ${catalog.townOrArrondissement}</p>

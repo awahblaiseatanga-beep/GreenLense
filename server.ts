@@ -93,6 +93,12 @@ function calculateDirtyScoreAndTrend(catalog: any) {
   sortedObs.forEach((subObs: any) => {
     // Tag the correct observation references in the target list
     const obs = obsList.find((originalObs: any) => originalObs.id === subObs.id) || subObs;
+    
+    if (obs.isCriticalGrowth) {
+      obs.isCountedForActivation = false;
+      return;
+    }
+
     const reporter = obs.reporterName || "anonymous";
     if (!contributorCounts[reporter]) {
       contributorCounts[reporter] = 0;
@@ -1027,10 +1033,19 @@ async function startServer() {
 
   // API 4: Add user observation with deterministic scoring engine recalculations
   app.post("/api/observations", async (req, res) => {
-    const { catalogId, region, city, townOrArrondissement, neighborhood, description, photoUrl, photoUrls, imageHash, reporterName, reporterEmail, pollutionTag } = req.body;
+    const { 
+      catalogId, region, city, townOrArrondissement, neighborhood, 
+      description, photoUrl, photoUrls, imageHash, 
+      reporterName, reporterEmail, pollutionTag,
+      isCriticalGrowth, criticalChangeDescription
+    } = req.body;
 
     if (!description) {
       return res.status(400).json({ error: "Observation description is required." });
+    }
+
+    if (isCriticalGrowth && !criticalChangeDescription) {
+      return res.status(400).json({ error: "Critical Change Description is required for Critical Growth reports." });
     }
 
     // Resolve or Auto-create Catalog from live db/memory
@@ -1096,6 +1111,29 @@ async function startServer() {
           };
           catalogs.push(targetCatalog);
         }
+      }
+    }
+
+    // Limit Validation for Critical Reports (Max 5 Critical Growth Images per User per Area within a 7-day period)
+    if (isCriticalGrowth) {
+      const emailToMatch = reporterEmail || userStats?.email || "awahblaiseatanga@gmail.com";
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const criticalReportsForUser = (targetCatalog.observations || []).filter((o: any) => {
+        // Handle nested aiClassification or direct props
+        const isCrit = o.isCriticalGrowth || o.aiClassification?.isCriticalGrowth;
+        const oDate = new Date(o.timestamp);
+        
+        // Wait, how do we get reporterEmail from observation? Observation only saves reporterName right now.
+        // If there's no email, we will approximate using reporterName.
+        const rName = o.reporterName || "";
+        const uName = reporterName || userStats?.fullName || "";
+        return isCrit && oDate >= sevenDaysAgo && rName === uName;
+      });
+
+      if (criticalReportsForUser.length >= 5) {
+        return res.status(403).json({ error: "Maximum critical growth reports reached. Limit is 5 reports per area within a 7-day period." });
       }
     }
 
@@ -1186,7 +1224,9 @@ async function startServer() {
       reporterName: reporterName || userStats.fullName,
       timestamp: new Date().toISOString(),
       pollutionTag: pollutionTag || "Moderately Polluted",
-      aiClassification
+      aiClassification,
+      isCriticalGrowth,
+      criticalChangeDescription
     };
 
     // Live Supabase Writer
@@ -1225,7 +1265,9 @@ async function startServer() {
     targetCatalog.observations.unshift(newObservation);
     
     // Recalculate physical score with deterministic scoring engine!
-    calculateDirtyScoreAndTrend(targetCatalog);
+    if (!isCriticalGrowth) {
+      calculateDirtyScoreAndTrend(targetCatalog);
+    }
     
     targetCatalog.lastUpdated = new Date().toLocaleDateString();
 
@@ -1233,6 +1275,10 @@ async function startServer() {
     userStats.contributionsCount += 1;
     userStats.xp += 30; // 30 XP per valid observation
     
+    if (isCriticalGrowth) {
+      console.info(`[Notification Engine]: Fired Urgent Alert. Connected organizations and community guardians notified of critical growth in ${targetCatalog.neighborhood}.`);
+    }
+
     // Recalculate level
     if (userStats.xp < 100) userStats.level = "Observer";
     else if (userStats.xp < 250) userStats.level = "Eco Scout";

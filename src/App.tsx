@@ -361,7 +361,17 @@ export default function App() {
   // Flow Submissions State hooks
   const handleObservationAdded = (newObs: any, catalog: any, updatedUserStats: any) => {
     setCatalogs(prev => {
-      const updated = prev.map(c => c.id === catalog.id ? catalog : c);
+      let found = false;
+      let updated = prev.map(c => {
+        if (c.id === catalog.id) {
+          found = true;
+          return catalog;
+        }
+        return c;
+      });
+      if (!found) {
+        updated = [catalog, ...updated];
+      }
       localStorage.setItem("greenlens_catalogs", JSON.stringify(updated));
       return updated;
     });

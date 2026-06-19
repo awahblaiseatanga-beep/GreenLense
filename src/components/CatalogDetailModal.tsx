@@ -261,6 +261,42 @@ export default function CatalogDetailModal({ catalog, onClose, onCompleteCampaig
     }
   };
 
+  // Generate Timeline Events
+  const timelineEvents = [];
+  
+  if (catalog.activationDate || catalog.status !== "UNVERIFIED ALERT") {
+    const defaultDate = catalog.observations?.length > 0 ? catalog.observations[catalog.observations.length - 1].timestamp : new Date().toISOString();
+    timelineEvents.push({
+      id: "verified",
+      type: "verified",
+      date: new Date(catalog.activationDate || defaultDate),
+      title: "Area Verified",
+      description: "Community consensus activated this catalog."
+    });
+  }
+
+  (catalog.campaigns || []).forEach(c => {
+    timelineEvents.push({
+      id: c.id,
+      type: "campaign",
+      date: new Date(c.startDate),
+      title: "Cleanup Campaign",
+      description: c.title
+    });
+  });
+
+  (catalog.observations || []).filter(o => o.isCriticalGrowth).forEach(o => {
+    timelineEvents.push({
+      id: o.id,
+      type: "critical_growth",
+      date: new Date(o.timestamp),
+      title: "Critical Growth Report",
+      description: o.criticalChangeDescription || o.description
+    });
+  });
+
+  timelineEvents.sort((a, b) => b.date.getTime() - a.date.getTime()); // newest first
+
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex justify-center p-4 overflow-y-auto" id="catalog-modal-overlay">
       <div className="bg-white rounded-2xl w-full max-w-3xl my-auto shadow-2xl relative flex flex-col overflow-hidden max-h-[90vh]" id="modal-container-inner">
@@ -711,6 +747,36 @@ export default function CatalogDetailModal({ catalog, onClose, onCompleteCampaig
                 </LineChart>
               </ResponsiveContainer>
             </div>
+            
+            {/* Environmental Timeline */}
+            <div className="pt-4 border-t border-gray-150">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-mono block mb-4">
+                Environmental Timeline
+              </span>
+              <div className="relative border-l-2 border-gray-100 ml-3 space-y-6">
+                {timelineEvents.map((event) => (
+                  <div key={event.id} className="relative pl-5">
+                    <div className={`absolute -left-[9px] top-1 h-4 w-4 rounded-full border-2 border-white ${
+                      event.type === 'critical_growth' ? 'bg-amber-500' :
+                      event.type === 'campaign' ? 'bg-blue-500' : 'bg-emerald-500'
+                    }`} />
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{event.date.toLocaleDateString()}</span>
+                      <h4 className={`text-xs font-black ${
+                        event.type === 'critical_growth' ? 'text-amber-700' :
+                        event.type === 'campaign' ? 'text-blue-700' : 'text-emerald-700'
+                      }`}>
+                        {event.title}
+                      </h4>
+                      <p className="text-[11px] font-medium text-gray-600 leading-snug">{event.description}</p>
+                    </div>
+                  </div>
+                ))}
+                {timelineEvents.length === 0 && (
+                   <p className="pl-5 text-xs text-gray-400 italic">No historical events recorded yet.</p>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Section 3: Cleaning Campaign lifecycle track */}
@@ -912,7 +978,7 @@ export default function CatalogDetailModal({ catalog, onClose, onCompleteCampaig
             ) : (
               <div className="space-y-6" id="modal-obs-list">
                 {catalog.observations.map((obs) => (
-                  <div key={obs.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col md:flex-row shadow-2xs">
+                  <div key={obs.id} className={`bg-white rounded-xl border overflow-hidden flex flex-col md:flex-row shadow-2xs ${obs.isCriticalGrowth ? 'border-amber-300 shadow-[0_0_0_1px_rgba(252,211,77,0.2)]' : 'border-gray-200'}`}>
                     
                     {/* Obs Side Photo */}
                     <div className="md:w-1/3 aspect-[4/3] md:aspect-auto bg-gray-100 flex overflow-x-auto snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
@@ -937,10 +1003,16 @@ export default function CatalogDetailModal({ catalog, onClose, onCompleteCampaig
                     {/* Obs Metadata and classifications */}
                     <div className="p-5 md:w-2/3 space-y-4" id="obs-detail-body">
                       <div>
+                        {obs.isCriticalGrowth && (
+                          <div className="mb-3 inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-100 border border-amber-200 text-amber-900 rounded-lg shadow-3xs" title="This observation represents a critical worsening of conditions.">
+                            <AlertTriangle className="h-4 w-4 shrink-0" />
+                            <span className="text-[10px] font-black uppercase tracking-wider">Critical Update</span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
                           <span className="text-[9px] font-mono tracking-tight text-gray-400 font-bold uppercase leading-none flex items-center flex-wrap gap-1.5">
-                            Reported by: {obs.reporterName} • {new Date(obs.timestamp).toLocaleDateString()}
-                            {catalog.status === "UNVERIFIED ALERT" && (
+                            {obs.isCriticalGrowth ? "Reported Environmental Change by:" : "Reported by:"} {obs.reporterName} • {new Date(obs.timestamp).toLocaleDateString()}
+                            {catalog.status === "UNVERIFIED ALERT" && !obs.isCriticalGrowth && (
                               obs.isCountedForActivation !== false ? (
                                 <span className="inline-block bg-emerald-50 text-emerald-800 text-[8px] font-black px-1.5 py-0.5 rounded-sm border border-emerald-200 uppercase tracking-tight font-sans">
                                   ✓ Counted for Verification
@@ -970,6 +1042,14 @@ export default function CatalogDetailModal({ catalog, onClose, onCompleteCampaig
                         <p className="text-xs text-gray-700 font-medium leading-relaxed italic pr-2 mt-1">
                           "{obs.description}"
                         </p>
+                        {obs.isCriticalGrowth && obs.criticalChangeDescription && (
+                          <div className="mt-3 bg-amber-50/50 p-3 rounded-lg border border-amber-100">
+                            <span className="text-[10px] uppercase font-black text-amber-800 tracking-wider block mb-1">What Changed:</span>
+                            <p className="text-xs text-amber-950 font-medium leading-relaxed">
+                              {obs.criticalChangeDescription}
+                            </p>
+                          </div>
+                        )}
                       </div>
 
                       {/* AI Classified results banner */}

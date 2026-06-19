@@ -34,6 +34,7 @@ import {
   FolderOpen
 } from "lucide-react";
 import { EnvironmentalCatalog, CameroonRegion } from "../types";
+import LocationMapInput from "./LocationMapInput";
 
 const computeImageHash = (img: HTMLImageElement): string => {
   const c = document.createElement("canvas");
@@ -159,6 +160,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
   const [city, setCity] = useState("Yaoundé");
   const [town, setTown] = useState("Yaoundé VI");
   const [neighborhood, setNeighborhood] = useState("Melen");
+  const [coordinates, setCoordinates] = useState<{lat: number; lon: number} | null>(null);
   
   const [description, setDescription] = useState("");
   const [uploadedPhotos, setUploadedPhotos] = useState<{url: string, name: string}[]>([]);
@@ -174,11 +176,50 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
   const [successResponse, setSuccessResponse] = useState<any>(null);
   const [rejectionData, setRejectionData] = useState<any | null>(null);
 
+  // Critical Growth reporting states
+  const [isCriticalGrowthMode, setIsCriticalGrowthMode] = useState(false);
+  const [criticalChangeDescription, setCriticalChangeDescription] = useState("");
+  const [showCriticalModal, setShowCriticalModal] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Dynamic cascades when region changes
-  useEffect(() => {
-    const cities = CITY_MAPPING[region] || [];
+  const handleLocationSelect = (loc: { lat?: number; lon?: number; region?: string; city?: string; town?: string; neighborhood?: string }) => {
+    if (loc.lat !== undefined && loc.lon !== undefined) {
+      setCoordinates({ lat: loc.lat, lon: loc.lon });
+    }
+    // Deep mapping for Cameroon regions
+    if (loc.region) {
+      const regMatch = loc.region.toLowerCase();
+      let matchedRegion: CameroonRegion | undefined;
+
+      if (regMatch.includes("centre") || regMatch.includes("center")) matchedRegion = "Centre";
+      else if (regMatch.includes("littoral")) matchedRegion = "Littoral";
+      else if (regMatch.includes("north-west") || regMatch.includes("northwest") || regMatch.includes("nord-ouest") || regMatch.includes("north west")) matchedRegion = "North West";
+      else if (regMatch.includes("south-west") || regMatch.includes("southwest") || regMatch.includes("sud-ouest") || regMatch.includes("south west")) matchedRegion = "South West";
+      else if (regMatch.includes("far-north") || regMatch.includes("far north") || regMatch.includes("extreme-nord") || regMatch.includes("extrême-nord")) matchedRegion = "Far North";
+      else if (regMatch.includes("north") || regMatch.includes("nord")) matchedRegion = "North"; // put after far-north and north-west
+      else if (regMatch.includes("south") || regMatch.includes("sud")) matchedRegion = "South"; // put after south-west
+      else if (regMatch.includes("east") || regMatch.includes("est")) matchedRegion = "East";
+      else if (regMatch.includes("west") || regMatch.includes("ouest")) matchedRegion = "West"; // put after south-west, north-west
+      else if (regMatch.includes("adamaoua") || regMatch.includes("adamawa")) matchedRegion = "Adamaoua";
+
+      if (matchedRegion) {
+        setRegion(matchedRegion);
+      }
+    }
+    if (loc.city) {
+      setCity(loc.city);
+    }
+    if (loc.neighborhood || loc.town) {
+      setTown(loc.town || loc.neighborhood || "");
+      setNeighborhood(loc.neighborhood || loc.town || "");
+    }
+  };
+
+  // Manual Region selection handler
+  const handleRegionChange = (newRegion: CameroonRegion) => {
+    setRegion(newRegion);
+    const cities = CITY_MAPPING[newRegion] || [];
     const defaultCity = cities[0] || "";
     setCity(defaultCity);
     
@@ -189,7 +230,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
     const neighborhoods = defaultTown ? (NEIGHBORHOOD_MAPPING[defaultTown] || []) : [];
     const defaultNeighborhood = neighborhoods[0] || defaultTown;
     setNeighborhood(defaultNeighborhood);
-  }, [region]);
+  };
 
   // Input handlers with smart matching defaults for known configurations
   const handleCityChange = (newCity: string) => {
@@ -379,13 +420,16 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
           city,
           townOrArrondissement: town,
           neighborhood: neighborhood || town,
+          coordinates,
           description,
           photoUrl: photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80",
           photoUrls: uploadedPhotos.length > 0 ? uploadedPhotos.map(p => p.url) : [photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80"],
           imageHash: uploadedPhotos[0]?.name?.includes("||") ? uploadedPhotos[0].name.split("||")[1] : null,
           reporterName: userStats?.fullName || "Eco Scout",
           reporterEmail: userStats?.email || "user@example.com",
-          pollutionTag
+          pollutionTag,
+          isCriticalGrowth: isCriticalGrowthMode,
+          criticalChangeDescription: isCriticalGrowthMode ? criticalChangeDescription : undefined
         })
       });
 
@@ -420,6 +464,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
         city,
         townOrArrondissement: town,
         neighborhood: neighborhood || town,
+        coordinates,
         description,
         photoUrl: photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80",
         photoUrls: uploadedPhotos.length > 0 ? uploadedPhotos.map(p => p.url) : [photoUrl || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80"],
@@ -427,6 +472,8 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
         reporterName: userStats?.fullName || "Eco Scout",
         reporterEmail: userStats?.email || "user@example.com",
         timestamp: new Date().toISOString(),
+        isCriticalGrowth: isCriticalGrowthMode,
+        criticalChangeDescription: isCriticalGrowthMode ? criticalChangeDescription : undefined,
         aiClassification: {
           indicator: "Needs server analysis",
           threatLevel: "Moderate",
@@ -479,7 +526,20 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
     setUrlInput("");
     setPollutionTag("Moderately Polluted");
     setImpactArea("Local Ward (Radius < 250m)");
+    setIsCriticalGrowthMode(false);
+    setCriticalChangeDescription("");
   };
+
+  // Limit Calculation
+  const rCode = region.substring(0, 3).toUpperCase();
+  const cCode = city.substring(0, 3).toUpperCase();
+  const nCode = (neighborhood || town).substring(0, 3).toUpperCase();
+  const currentCatalogId = `LOC_${nCode}_${cCode}_${rCode}_CMR`;
+  const currentCatalog = catalogs.find(c => c.id === currentCatalogId);
+  const userNormalUploads = (currentCatalog?.observations || []).filter((o: any) => 
+    (o.reporterName === userStats?.fullName || o.reporterName === userStats?.email) && !o.isCriticalGrowth
+  ).length;
+  const isAtNormalLimit = userNormalUploads >= 2 && userStats?.role !== "NGO Representative";
 
   return (
     <div className="flex items-center justify-center p-2 max-w-2xl mx-auto" id="contribute-tab-view">
@@ -549,7 +609,19 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
               </div>
             </div>
 
-            {successResponse.catalog && (successResponse.catalog.status === "UNVERIFIED ALERT" || (successResponse.catalog.countedObservations || 0) < 5 || (successResponse.catalog.contributorCount || 0) < 3) && (
+            {successResponse?.observation?.isCriticalGrowth && (
+              <div className="bg-amber-50 p-4 rounded-2xl max-w-sm mx-auto border border-amber-200 text-left text-xs space-y-1" id="critical-notification-alert">
+                <div className="flex items-center gap-1.5 mb-1 text-amber-900 font-bold uppercase tracking-wider text-[10px]">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span>Urgent Notification Triggered</span>
+                </div>
+                <p className="text-amber-800 leading-snug">
+                  Connected Area Followers, Local NGOs, and Community Guardians have been pinged globally regarding this critical deterioration!
+                </p>
+              </div>
+            )}
+
+            {successResponse.catalog && (successResponse.catalog.status === "UNVERIFIED ALERT" || (successResponse.catalog.countedObservations || 0) < 5 || (successResponse.catalog.contributorCount || 0) < 3) && !successResponse?.observation?.isCriticalGrowth && (
               <div className="bg-[#25D366]/5 border border-[#25D366]/20 p-4 rounded-xl max-w-sm mx-auto text-left space-y-3 animate-fadeIn" id="success-screen-whatsapp-invite">
                 <div className="flex items-center gap-2">
                   <div className="h-7 w-7 bg-[#25D366] text-white rounded-full flex items-center justify-center shrink-0">
@@ -602,24 +674,58 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
               </button>
             </div>
           </div>
+        ) : isAtNormalLimit && !isCriticalGrowthMode ? (
+          /* Limit Reached Interstitial */
+          <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-2xl border border-gray-200 text-center gap-4">
+            <ShieldAlert className="w-12 h-12 text-amber-500" />
+            <h3 className="text-sm font-black text-gray-900 uppercase">You have reached the maximum verification contribution for this area.</h3>
+            <p className="text-xs text-gray-600 max-w-md">Additional community contributors are needed to complete verification.</p>
+            
+            <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm mt-2">
+              <button 
+                type="button" 
+                onClick={() => {
+                  const refLink = `${window.location.origin}/?ref=${encodeURIComponent(userStats?.email || "anonymous")}&alertId=${encodeURIComponent(currentCatalogId)}`;
+                  const message = `🚨 Environmental Verification Needed\n\nI just reached the contribution limits for ${neighborhood}, ${city}.\nGreenLens needs your evidence to officially activate this area's Environmental Catalog.\nRef Link: ${refLink}`;
+                  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+                }}
+                className="flex-1 bg-[#25D366] hover:bg-[#20ba56] text-white py-2.5 rounded-xl text-xs font-bold shadow-sm"
+              >
+                Share on WhatsApp
+              </button>
+            </div>
+
+            <div className="w-full h-px bg-gray-200 my-4" />
+            
+            <button 
+              type="button" 
+              onClick={() => setShowCriticalModal(true)} 
+              className="flex items-center gap-2 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-4 py-2.5 rounded-xl text-xs font-black transition-colors shadow-3xs"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Report Critical Growth
+            </button>
+          </div>
         ) : (
           /* Active Interactive Audit Submission Form */
           <form onSubmit={handleSubmit} className="space-y-6 text-left">
             
-            {/* Form Header block */}
-            <div className="flex items-start gap-4">
-              <div className="w-11 h-11 bg-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm">
-                <Camera className="w-5.5 h-5.5 text-white" />
+              {/* Form Header block */}
+              <div className="flex items-start gap-4">
+                <div className="w-11 h-11 bg-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm">
+                  {isCriticalGrowthMode ? <AlertTriangle className="w-5.5 h-5.5 text-white" /> : <Camera className="w-5.5 h-5.5 text-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-base sm:text-lg font-black text-gray-950 tracking-tight leading-snug">
+                    {isCriticalGrowthMode ? "Critical Growth Report" : "Create Environmental Registry"}
+                  </h2>
+                  <p className="text-gray-500 text-xs sm:text-[13px] leading-relaxed font-medium">
+                    {isCriticalGrowthMode 
+                      ? "Document rapid deterioration or severe worsening of conditions in this area."
+                      : "Drop a photo or select administrative locations to map ecological hotspots instantly across Cameroon capital districts."}
+                  </p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-base sm:text-lg font-black text-gray-950 tracking-tight leading-snug">
-                  Create Environmental Registry
-                </h2>
-                <p className="text-gray-500 text-xs sm:text-[13px] leading-relaxed font-medium">
-                  Drop a photo or select administrative locations to map ecological hotspots instantly across Cameroon capital districts.
-                </p>
-              </div>
-            </div>
 
             {/* Custom Tab Switcher for Evidence Attachment style */}
             <div className="space-y-2">
@@ -669,6 +775,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
             {/* Tab Outputs */}
             <div className="mt-2 text-center" id="tab-evidence-content">
               {activeTab === "upload" && (
+                <>
                 <div
                   onClick={triggerFileSelector}
                   className="border-2 border-dashed border-gray-200 rounded-xl p-6 hover:border-primary hover:bg-emerald-50/20 cursor-pointer transition-all bg-gray-50/50"
@@ -706,6 +813,43 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
                     </>
                   )}
                 </div>
+                {uploadedPhotos.length >= 2 && (
+                  <div className="mt-4 bg-[#25D366]/5 border border-[#25D366]/20 p-4 rounded-xl text-left space-y-3 animate-fadeIn">
+                    <div className="flex items-center gap-2">
+                      <div className="h-7 w-7 bg-[#25D366] text-white rounded-full flex items-center justify-center shrink-0">
+                        <svg className="h-4.5 w-4.5 fill-current" viewBox="0 0 24 24">
+                          <path d="M12.036 0C5.59 0 .36 5.23 0 11.67c0 2.06.54 4.06 1.57 5.83L0 24l6.5-1.7c1.7.9 3.6 1.4 5.5 1.4 6.45 0 11.68-5.23 11.68-11.68C23.68 5.4 18.45.09 12.036.09z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-gray-900 leading-none">Invite Contributors</h4>
+                        <span className="text-[9px] text-[#20ba56] font-bold">More evidence equals faster verification</span>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-gray-650 leading-normal">
+                      Great job adding multiple photos! Invite others to verify this area so it becomes an official catalog faster.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const areaName = `${neighborhood ? neighborhood + ', ' : ''}${city || region || 'Cameroon Local Area'}`;
+                        const refLink = `${window.location.origin}/?ref=${encodeURIComponent("anonymous")}`;
+                        const message = `🚨 Environmental Evidence Documented\n\nI just documented an environmental issue in:\n${areaName}\n\nGreenLens needs additional community evidence to trigger an official Environmental Catalog.\n\nContribute your observation here:\n${refLink}\n\nHelp improve environmental intelligence in our community!`;
+                        const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+                        window.open(waUrl, "_blank");
+                      }}
+                      className="w-full bg-[#25D366] hover:bg-[#20ba56] text-white py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                    >
+                      <svg className="h-4 w-4 fill-current shrink-0" viewBox="0 0 24 24">
+                        <title>WhatsApp</title>
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.459H12a11.8 11.8 0 008.413-3.481 11.8 11.8 0 003.481-8.412c-.003-3.223-1.258-6.254-3.535-8.532z" />
+                      </svg>
+                      Share on WhatsApp
+                    </button>
+                  </div>
+                )}
+                </>
               )}
 
               {activeTab === "presets" && (
@@ -769,6 +913,9 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
               )}
             </div>
 
+            {/* Smart Location Map */}
+            <LocationMapInput onLocationSelect={handleLocationSelect} pollutionTag={pollutionTag} />
+
             {/* Form Fields: Grid Configurations */}
             <div className="space-y-4">
               
@@ -804,7 +951,7 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
                   <div className="relative">
                     <select
                       value={region}
-                      onChange={(e) => setRegion(e.target.value as CameroonRegion)}
+                      onChange={(e) => handleRegionChange(e.target.value as CameroonRegion)}
                       className="w-full bg-white border border-gray-200 rounded-xl h-11 px-3 text-xs font-bold text-gray-800 outline-none focus:border-primary cursor-pointer appearance-none shadow-3xs"
                     >
                       {REGION_OPTIONS.map((r) => (
@@ -904,6 +1051,23 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
                 />
               </div>
 
+              {isCriticalGrowthMode && (
+                <div className="bg-amber-50 rounded-xl p-4 border border-amber-200 shadow-3xs">
+                  <label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-amber-900 font-mono mb-3">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    Required: What changed since your last report?
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={criticalChangeDescription}
+                    onChange={(e) => setCriticalChangeDescription(e.target.value)}
+                    placeholder="e.g. The dumpsite has doubled in size... New waste is being dumped daily... Drainage is now fully blocked..."
+                    className="w-full bg-white border border-amber-200 rounded-xl p-3 text-xs text-gray-900 font-medium outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20 transition-all shadow-3xs"
+                    required
+                  />
+                </div>
+              )}
+
               {/* Unified Link Resolution Card */}
               <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -975,6 +1139,63 @@ export default function ContributeTab({ onObservationAdded, catalogsCount, userS
         )}
         
       </div>
+
+      <AnimatePresence>
+        {showCriticalModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-[420px] w-full shadow-2xl relative overflow-hidden text-center"
+            >
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-400 to-amber-600" />
+              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-5 mx-auto border border-amber-100">
+                <AlertTriangle className="w-8 h-8 text-amber-500" />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 mb-2 font-mono tracking-tight">Report Rapid Environmental Change</h3>
+              <p className="text-[13px] text-gray-600 mb-6 leading-relaxed">
+                Use this option only when environmental conditions have significantly worsened since previous observations.
+              </p>
+              
+              <div className="text-left bg-gray-50 rounded-xl p-4 mb-8">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 block">Examples</span>
+                <ul className="text-xs text-gray-700 space-y-1.5 font-medium list-disc pl-4">
+                  <li>Rapid waste accumulation</li>
+                  <li>New illegal dumping</li>
+                  <li>Blocked drainage</li>
+                  <li>Major environmental deterioration</li>
+                </ul>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 w-full">
+                <button
+                  type="button"
+                  onClick={() => setShowCriticalModal(false)}
+                  className="flex-1 px-4 py-3 text-xs font-bold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCriticalModal(false);
+                    setIsCriticalGrowthMode(true);
+                  }}
+                  className="flex-1 px-4 py-3 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 active:scale-95 rounded-xl transition-all cursor-pointer shadow-sm"
+                >
+                  Continue
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {rejectionData && (

@@ -41,6 +41,8 @@ export interface Observation {
   facebookPostUrl?: string;
   imageHash?: string;
   isCountedForActivation?: boolean;
+  isCriticalGrowth?: boolean;
+  criticalChangeDescription?: string;
 }
 
 export interface Verification {
